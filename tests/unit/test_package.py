@@ -44,28 +44,33 @@ def test_cli_help():
 
 
 def test_cli_build_invokes():
-    result = RUNNER.invoke(app, ["build"])
+    # --input-dir is now required
+    result = RUNNER.invoke(app, ["build", "--input-dir", "data/toolbench"])
     assert result.exit_code == 0
-    assert "not yet implemented" in result.output
+    assert "Not implemented yet" in result.output
 
 
 def test_cli_generate_defaults():
-    result = RUNNER.invoke(app, ["generate"])
+    # --output is now required; seed/steering shown in rich table
+    result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl"])
     assert result.exit_code == 0
-    assert "seed=42" in result.output
-    assert "steering=True" in result.output
+    assert "42" in result.output   # default seed
+    assert "True" in result.output  # steering on by default
 
 
 def test_cli_generate_no_steering():
-    result = RUNNER.invoke(app, ["generate", "--no-cross-conversation-steering"])
+    result = RUNNER.invoke(
+        app, ["generate", "--output", "out.jsonl", "--no-cross-conversation-steering"]
+    )
     assert result.exit_code == 0
-    assert "steering=False" in result.output
+    assert "False" in result.output  # steering disabled
 
 
 def test_cli_evaluate_invokes():
-    result = RUNNER.invoke(app, ["evaluate"])
+    # INPUT is now a required positional argument
+    result = RUNNER.invoke(app, ["evaluate", "conversations.jsonl"])
     assert result.exit_code == 0
-    assert "not yet implemented" in result.output
+    assert "Not implemented yet" in result.output
 
 
 @pytest.mark.parametrize(
