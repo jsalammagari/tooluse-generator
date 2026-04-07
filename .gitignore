@@ -75,6 +75,9 @@ data/toolbench/
 data/*.json
 data/*.jsonl
 
+# Session transcripts
+phase_1_7_to_2_1.txt
+
 # Secrets
 .env
 *.pem
