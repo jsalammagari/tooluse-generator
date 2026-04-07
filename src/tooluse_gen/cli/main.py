@@ -10,6 +10,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from tooluse_gen.utils.logging import get_logger, setup_logging
+
+logger = get_logger("cli")
+
 console = Console()
 err_console = Console(stderr=True, style="bold red")
 
@@ -63,6 +67,8 @@ def main(
     _state["verbose"] = verbose
     _state["quiet"] = quiet
     _state["config"] = config
+    setup_logging(verbosity=verbose, quiet=quiet)
+    logger.debug("CLI started: verbosity=%d quiet=%s config=%s", verbose, quiet, config)
 
 
 # ---------------------------------------------------------------------------
