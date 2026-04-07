@@ -110,9 +110,7 @@ def test_load_secrets_missing_required_key_raises(tmp_path: Path):
 def test_load_secrets_with_all_optional_fields(tmp_path: Path):
     env_file = tmp_path / ".env"
     env_file.write_text(
-        f"OPENAI_API_KEY={FAKE_KEY}\n"
-        "ANTHROPIC_API_KEY=sk-ant-test\n"
-        "HUGGINGFACE_TOKEN=hf_test\n"
+        f"OPENAI_API_KEY={FAKE_KEY}\nANTHROPIC_API_KEY=sk-ant-test\nHUGGINGFACE_TOKEN=hf_test\n"
     )
     secrets = load_secrets(env_file=env_file)
     assert secrets.openai_api_key.get_secret_value() == FAKE_KEY

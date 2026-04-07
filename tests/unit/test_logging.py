@@ -208,7 +208,11 @@ def test_log_duration_records_elapsed(caplog: pytest.LogCaptureFixture):
 
 
 def test_log_duration_failure_logs_error(caplog: pytest.LogCaptureFixture):
-    with caplog.at_level(logging.ERROR, logger="tooluse_gen"), pytest.raises(RuntimeError), log_duration("failing op"):
+    with (
+        caplog.at_level(logging.ERROR, logger="tooluse_gen"),
+        pytest.raises(RuntimeError),
+        log_duration("failing op"),
+    ):
         raise RuntimeError("oops")
     assert any("Failed" in r.message and "failing op" in r.message for r in caplog.records)
 
@@ -220,7 +224,10 @@ def test_log_duration_re_raises_exception():
 
 def test_log_duration_custom_logger(caplog: pytest.LogCaptureFixture):
     custom = logging.getLogger("tooluse_gen.custom")
-    with caplog.at_level(logging.INFO, logger="tooluse_gen.custom"), log_duration("custom op", logger=custom):
+    with (
+        caplog.at_level(logging.INFO, logger="tooluse_gen.custom"),
+        log_duration("custom op", logger=custom),
+    ):
         pass
     assert any("custom op" in r.message for r in caplog.records)
 

@@ -54,7 +54,7 @@ def test_cli_generate_defaults():
     # --output is now required; seed/steering shown in rich table
     result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl"])
     assert result.exit_code == 0
-    assert "42" in result.output   # default seed
+    assert "42" in result.output  # default seed
     assert "True" in result.output  # steering on by default
 
 

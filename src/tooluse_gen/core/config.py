@@ -114,9 +114,7 @@ class SamplingConfig(BaseModel):
     @model_validator(mode="after")
     def check_steps_order(self) -> SamplingConfig:
         if self.min_steps >= self.max_steps:
-            raise ValueError(
-                f"min_steps ({self.min_steps}) must be < max_steps ({self.max_steps})"
-            )
+            raise ValueError(f"min_steps ({self.min_steps}) must be < max_steps ({self.max_steps})")
         return self
 
 

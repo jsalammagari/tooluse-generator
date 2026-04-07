@@ -46,7 +46,9 @@ _VERBOSITY_TO_LEVEL = {
 
 _CONSOLE_FMT = "[%(asctime)s] %(levelname)-8s | %(name)s | %(message)s"
 _CONSOLE_DATE = "%H:%M:%S"
-_FILE_FMT = "%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d | %(message)s"
+_FILE_FMT = (
+    "%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d | %(message)s"
+)
 _FILE_DATE = "%Y-%m-%d %H:%M:%S"
 
 
@@ -195,7 +197,9 @@ def log_context(**kwargs: Any) -> Generator[None, None, None]:
 
 
 @contextlib.contextmanager
-def log_duration(operation: str, logger: logging.Logger | None = None) -> Generator[None, None, None]:
+def log_duration(
+    operation: str, logger: logging.Logger | None = None
+) -> Generator[None, None, None]:
     """Context manager that logs the wall-clock duration of an operation.
 
     Args:

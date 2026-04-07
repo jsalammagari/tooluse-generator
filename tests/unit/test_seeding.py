@@ -108,7 +108,14 @@ def test_component_seed_different_bases_differ():
 
 def test_component_seed_in_uint32_range():
     sm = SeedManager(12345)
-    for comp in ("sampling", "mock_generation", "user_simulator", "assistant", "judge", "diversity"):
+    for comp in (
+        "sampling",
+        "mock_generation",
+        "user_simulator",
+        "assistant",
+        "judge",
+        "diversity",
+    ):
         seed = sm.get_component_seed(comp)
         assert 0 <= seed < 2**32
 
@@ -304,6 +311,4 @@ def test_warn_nondeterministic_logs_warning(caplog: pytest.LogCaptureFixture):
     with caplog.at_level(logging.WARNING, logger="tooluse_gen.seeding"):
         warn_nondeterministic("faiss", "ANN search is not deterministic")
 
-    assert any(
-        "faiss" in r.message and "ANN search" in r.message for r in caplog.records
-    )
+    assert any("faiss" in r.message and "ANN search" in r.message for r in caplog.records)

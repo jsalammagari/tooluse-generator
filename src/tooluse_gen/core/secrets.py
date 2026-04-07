@@ -77,11 +77,7 @@ def load_secrets(env_file: Path | None = None) -> Secrets:
         return Secrets()
     except ValidationError as exc:
         # Extract field names from the error without exposing any values
-        missing = [
-            e["loc"][0]
-            for e in exc.errors()
-            if e.get("type") in ("missing", "value_error")
-        ]
+        missing = [e["loc"][0] for e in exc.errors() if e.get("type") in ("missing", "value_error")]
         msg = (
             "Missing required environment variable(s): "
             + ", ".join(str(f).upper() for f in missing)

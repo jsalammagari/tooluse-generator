@@ -116,9 +116,7 @@ def get_seed_manager() -> SeedManager:
         RuntimeError: If :func:`set_global_seed` has not been called yet.
     """
     if _seed_manager is None:
-        raise RuntimeError(
-            "Global seed manager not initialized — call set_global_seed() first."
-        )
+        raise RuntimeError("Global seed manager not initialized — call set_global_seed() first.")
     return _seed_manager
 
 
@@ -226,6 +224,7 @@ def _try_seed_torch(seed: int) -> None:
     """Seed PyTorch if it is installed."""
     try:
         import torch
+
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
@@ -237,6 +236,7 @@ def _get_torch_state() -> Any:
     """Return PyTorch RNG state, or *None* if PyTorch is not installed."""
     try:
         import torch
+
         return torch.get_rng_state()
     except ImportError:
         return None
@@ -248,6 +248,7 @@ def _restore_torch_state(state: Any) -> None:
         return
     try:
         import torch
+
         torch.set_rng_state(state)
     except ImportError:
         pass

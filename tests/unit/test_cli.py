@@ -26,7 +26,13 @@ def test_root_help():
 def test_build_help():
     result = RUNNER.invoke(app, ["build", "--help"])
     assert result.exit_code == 0
-    for flag in ("--input-dir", "--output-dir", "--embedding-model", "--similarity-thresh", "--force"):
+    for flag in (
+        "--input-dir",
+        "--output-dir",
+        "--embedding-model",
+        "--similarity-thresh",
+        "--force",
+    ):
         # Rich may truncate long flag names with '…' in narrow terminals; check prefix
         assert flag in result.output
 
@@ -107,9 +113,9 @@ def test_generate_domains_parsed():
 def test_generate_defaults():
     result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl"])
     assert result.exit_code == 0
-    assert "100" in result.output   # default count
-    assert "42" in result.output    # default seed
-    assert "3.5" in result.output   # default quality-threshold
+    assert "100" in result.output  # default count
+    assert "42" in result.output  # default seed
+    assert "3.5" in result.output  # default quality-threshold
 
 
 # ---------------------------------------------------------------------------
@@ -163,9 +169,7 @@ def test_global_quiet_suppresses_panel():
 
 
 def test_global_config_option():
-    result = RUNNER.invoke(
-        app, ["--config", "my_config.yaml", "build", "--input-dir", "data/"]
-    )
+    result = RUNNER.invoke(app, ["--config", "my_config.yaml", "build", "--input-dir", "data/"])
     assert result.exit_code == 0
     assert "my_config.yaml" in result.output
 
