@@ -24,6 +24,7 @@ classifiers = [
 
 dependencies = [
     "pydantic>=2.0",
+    "pydantic-settings>=2.0",
     "typer[all]>=0.9",
     "pyyaml",
     "networkx",
