@@ -88,7 +88,7 @@ class ClientManager:
             messages=messages,  # type: ignore[arg-type]
             **kwargs,
         )
-        content = response.choices[0].message.content
+        content: str | None = response.choices[0].message.content
         if content is None:
             raise ValueError("Model returned an empty response.")
         return content
@@ -122,12 +122,13 @@ class ClientManager:
             len(messages),
         )
 
-        return self.instructor.chat.completions.create(
+        result: T = self.instructor.chat.completions.create(
             model=resolved_model,
             response_model=response_model,
             messages=messages,  # type: ignore[arg-type]
             **kwargs,
         )
+        return result
 
     # ------------------------------------------------------------------
     # Convenience
