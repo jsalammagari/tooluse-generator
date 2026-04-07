@@ -30,5 +30,7 @@ repos:
         additional_dependencies:
           - pydantic>=2.0
           - pydantic-settings
+          - openai>=1.0
+          - instructor>=1.0
         args: ["--ignore-missing-imports"]
         files: ^src/

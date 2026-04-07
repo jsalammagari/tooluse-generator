@@ -85,7 +85,7 @@ class ClientManager:
 
         response = self.openai.chat.completions.create(
             model=resolved_model,
-            messages=messages,
+            messages=messages,  # type: ignore[arg-type]
             **kwargs,
         )
         content: str | None = response.choices[0].message.content
@@ -125,7 +125,7 @@ class ClientManager:
         result: T = self.instructor.chat.completions.create(
             model=resolved_model,
             response_model=response_model,
-            messages=messages,
+            messages=messages,  # type: ignore[arg-type]
             **kwargs,
         )
         return result
