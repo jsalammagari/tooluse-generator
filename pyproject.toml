@@ -64,26 +64,82 @@ where = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = ["tests/", "build/", ".venv/", "dist/", "*.egg-info"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",   # line length — handled by formatter
+    "B008",   # typer.Option() in defaults is the idiomatic Typer/Click pattern
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tooluse_gen"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
 
 # --- Black ---
 [tool.black]
 line-length = 100
 target-version = ["py310", "py311", "py312"]
+exclude = '''
+/(
+    \.venv
+  | \.git
+  | build
+  | dist
+  | \.eggs
+  | .*\.egg-info
+)/
+'''
 
 # --- MyPy ---
 [tool.mypy]
 python_version = "3.10"
-strict = false
+strict = true
 ignore_missing_imports = true
 warn_return_any = true
 warn_unused_configs = true
+plugins = ["pydantic.mypy"]
+# misc: Typer's @app.command() decorator lacks complete type stubs — suppress globally
+disable_error_code = ["misc"]
+
+[[tool.mypy.overrides]]
+module = [
+    "networkx.*",
+    "sentence_transformers.*",
+    "joblib.*",
+    "tqdm.*",
+    "yaml.*",
+    "instructor.*",
+]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 # --- Pytest ---
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "--tb=short -q"
+addopts = "-v --tb=short"
+markers = [
+    "unit: fast, isolated unit tests (no network, no LLM calls)",
+    "integration: tests that exercise multiple components together",
+    "e2e: full end-to-end pipeline tests (may call LLMs)",
+]
+
+# --- Coverage ---
+[tool.coverage.run]
+source = ["src/tooluse_gen"]
+omit = ["tests/*", "**/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 0

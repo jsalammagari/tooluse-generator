@@ -1,8 +1,8 @@
 """CLI entry point for tooluse-generator."""
 
-import typer
-from typing import Optional
 from pathlib import Path
+
+import typer
 
 app = typer.Typer(
     name="tooluse",
@@ -90,7 +90,7 @@ def evaluate(
         "-i",
         help="JSONL file of generated conversations to evaluate.",
     ),
-    output_file: Optional[Path] = typer.Option(
+    output_file: Path | None = typer.Option(
         None,
         "--output",
         "-o",
