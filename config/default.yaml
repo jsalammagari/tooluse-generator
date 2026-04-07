@@ -1,44 +1,67 @@
-# tooluse-generator default configuration
+# tooluse-generator — default configuration
+# All values shown are defaults. Override in a custom YAML or via CLI flags.
+# Paths support environment variable expansion: e.g. $HOME/mydata
 
-# ── LLM models ────────────────────────────────────────────────────────────────
+# ── LLM model identifiers ────────────────────────────────────────────────────
 models:
-  generator: "gpt-4o-mini"       # Agent driving conversation generation
-  judge: "gpt-4o-mini"           # LLM-as-judge for quality scoring
-  mock_executor: "gpt-4o-mini"   # Generates mock tool responses
+  # Assistant agent: drives tool selection and conversation turns
+  assistant: "gpt-4o"
+  # LLM-as-judge: scores generated conversations on quality dimensions
+  judge: "gpt-4o"
+  # User simulator: generates realistic user messages and follow-ups
+  user_simulator: "gpt-4o-mini"
+  # Mock generator: produces schema-consistent tool response payloads
+  mock_generator: "gpt-4o-mini"
+  # Sentence-transformer used for semantic edges in the Tool Graph
+  embedding: "all-MiniLM-L6-v2"
 
-# ── Generation ────────────────────────────────────────────────────────────────
-generation:
-  seed: 42
-  num_conversations: 100
-  min_tool_calls: 1
-  target_multi_step_ratio: 0.55  # Fraction of convs with ≥3 tool calls
-  target_multi_tool_ratio: 0.55  # Fraction of convs with ≥2 distinct tools
-  max_repair_attempts: 2
-  quality_threshold: 3.0         # Min average judge score (out of 5) to keep
+# ── Quality thresholds and repair settings ───────────────────────────────────
+quality:
+  # Minimum mean judge score (1.0–5.0) required to accept a conversation
+  min_score: 3.5
+  # Maximum repair attempts before a conversation is discarded
+  max_retries: 3
+  # Scoring dimensions evaluated by the LLM judge (order matters for prompts)
+  dimensions:
+    - tool_correctness      # Did the assistant call the right tools with valid args?
+    - argument_grounding    # Are later-step args grounded in prior outputs?
+    - task_completion       # Did the assistant fully resolve the user's request?
+    - naturalness           # Does the conversation read naturally and coherently?
 
-# ── Tool graph ────────────────────────────────────────────────────────────────
-graph:
-  max_tools_per_category: 50     # Cap tools ingested per ToolBench category
-  embedding_model: "all-MiniLM-L6-v2"
-  similarity_threshold: 0.6      # Min cosine similarity for semantic edges
-
-# ── Sampling ──────────────────────────────────────────────────────────────────
+# ── Tool-chain sampling parameters ───────────────────────────────────────────
 sampling:
-  chain_length_distribution:     # Relative weights for chain lengths 1–5+
-    1: 0.15
-    2: 0.25
-    3: 0.30
-    4: 0.20
-    5: 0.10
+  # Minimum tool calls in a generated conversation (must be < max_steps)
+  min_steps: 2
+  # Maximum tool calls in a generated conversation
+  max_steps: 5
+  # Cosine similarity threshold for adding semantic edges between tools (0–1)
+  similarity_threshold: 0.7
+  # Restrict to these ToolBench domains; null = use all available domains
+  domains: null
+  # Tool endpoint IDs to always exclude from sampling; null = no exclusions
+  excluded_tools: null
 
-# ── Cross-conversation steering ───────────────────────────────────────────────
-steering:
+# ── Cross-conversation diversity steering ────────────────────────────────────
+diversity:
+  # Set to false to disable steering (Run A in the diversity experiment)
   enabled: true
-  strategy: "frequency_penalty"  # Options: frequency_penalty | vector_retrieval
-  penalty_window: 20             # Look back at last N conversations
+  # Exponential decay for inverse-frequency tool weights (0 < decay ≤ 1)
+  # Higher values cause the recency penalty to fade faster
+  weight_decay: 0.9
+  # Target domain-coverage fraction before any domain is repeated
+  min_domain_coverage: 0.5
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# ── File-system paths (support $ENV_VAR expansion) ───────────────────────────
 paths:
-  data_dir: "data/toolbench"
-  artifacts_dir: "output/artifacts"
-  output_file: "output/conversations.jsonl"
+  # Where `tooluse build` writes the graph, registry, and index artifacts
+  build_dir: "./output/build"
+  # Root directory for generated conversation JSONL files
+  output_dir: "./output"
+  # Intermediate cache: embeddings, mock-response templates, etc.
+  cache_dir: "./.cache"
+
+# ── Global settings ──────────────────────────────────────────────────────────
+# Random seed for reproducible sampling and generation
+seed: 42
+# Verbosity level: 0 = normal, 1 = verbose, 2 = debug
+verbose: 0

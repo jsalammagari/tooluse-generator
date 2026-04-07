@@ -102,6 +102,8 @@ def test_config_yaml_loads():
     base = pathlib.Path(__file__).parents[2]
     cfg = yaml.safe_load((base / "config/default.yaml").read_text())
     assert "models" in cfg
-    assert "generation" in cfg
-    assert "steering" in cfg
-    assert cfg["generation"]["seed"] == 42
+    assert "quality" in cfg
+    assert "sampling" in cfg
+    assert "diversity" in cfg
+    assert "paths" in cfg
+    assert cfg["seed"] == 42
