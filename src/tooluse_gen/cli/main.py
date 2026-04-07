@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from tooluse_gen.utils.logging import get_logger, setup_logging
+from tooluse_gen.utils.seeding import set_global_seed
 
 logger = get_logger("cli")
 
@@ -199,6 +200,9 @@ def generate(
     if min_steps > max_steps:
         err_console.print("--min-steps must be <= --max-steps")
         raise typer.Exit(code=1)
+
+    set_global_seed(seed)
+    logger.info("Initialized with seed: %d", seed)
 
     steering = not no_cross_conversation_steering
     domain_list = [d.strip() for d in domains.split(",")] if domains else []
