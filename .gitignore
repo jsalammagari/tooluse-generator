@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+*.pth
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Distribution / packaging
+.Python
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.eggs/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+nosetests.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Project-specific
+output/
+*.pkl
+*.joblib
+.cache/
+data/toolbench/
+data/*.json
+data/*.jsonl
+
+# Secrets
+.env
+*.pem
+*.key

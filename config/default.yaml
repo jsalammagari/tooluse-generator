@@ -1,0 +1,44 @@
+# tooluse-generator default configuration
+
+# ── LLM models ────────────────────────────────────────────────────────────────
+models:
+  generator: "gpt-4o-mini"       # Agent driving conversation generation
+  judge: "gpt-4o-mini"           # LLM-as-judge for quality scoring
+  mock_executor: "gpt-4o-mini"   # Generates mock tool responses
+
+# ── Generation ────────────────────────────────────────────────────────────────
+generation:
+  seed: 42
+  num_conversations: 100
+  min_tool_calls: 1
+  target_multi_step_ratio: 0.55  # Fraction of convs with ≥3 tool calls
+  target_multi_tool_ratio: 0.55  # Fraction of convs with ≥2 distinct tools
+  max_repair_attempts: 2
+  quality_threshold: 3.0         # Min average judge score (out of 5) to keep
+
+# ── Tool graph ────────────────────────────────────────────────────────────────
+graph:
+  max_tools_per_category: 50     # Cap tools ingested per ToolBench category
+  embedding_model: "all-MiniLM-L6-v2"
+  similarity_threshold: 0.6      # Min cosine similarity for semantic edges
+
+# ── Sampling ──────────────────────────────────────────────────────────────────
+sampling:
+  chain_length_distribution:     # Relative weights for chain lengths 1–5+
+    1: 0.15
+    2: 0.25
+    3: 0.30
+    4: 0.20
+    5: 0.10
+
+# ── Cross-conversation steering ───────────────────────────────────────────────
+steering:
+  enabled: true
+  strategy: "frequency_penalty"  # Options: frequency_penalty | vector_retrieval
+  penalty_window: 20             # Look back at last N conversations
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+paths:
+  data_dir: "data/toolbench"
+  artifacts_dir: "output/artifacts"
+  output_file: "output/conversations.jsonl"

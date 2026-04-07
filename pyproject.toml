@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tooluse-generator"
+version = "0.1.0"
+description = "Offline synthetic data generation system for multi-turn tool-use conversations grounded in ToolBench schemas."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Jahnavi Salammagari" }]
+requires-python = ">=3.10"
+keywords = ["llm", "synthetic-data", "tool-use", "agents", "toolbench"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "pydantic>=2.0",
+    "typer[all]>=0.9",
+    "pyyaml",
+    "networkx",
+    "sentence-transformers",
+    "openai>=1.0",
+    "instructor",
+    "python-dotenv",
+    "joblib",
+    "numpy",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "pytest-asyncio",
+    "ruff",
+    "mypy",
+    "black",
+    "pre-commit",
+]
+
+[project.scripts]
+tooluse = "tooluse_gen.cli.main:app"
+
+[project.urls]
+Repository = "https://github.com/placeholder/tooluse-generator"
+Issues = "https://github.com/placeholder/tooluse-generator/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+# --- Ruff ---
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+# --- Black ---
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+# --- MyPy ---
+[tool.mypy]
+python_version = "3.10"
+strict = false
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+
+# --- Pytest ---
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--tb=short -q"
