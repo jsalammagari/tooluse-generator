@@ -35,6 +35,14 @@ from tooluse_gen.registry.models import (
     generate_endpoint_id,
     normalize_parameter_name,
 )
+from tooluse_gen.registry.normalizers import (
+    FieldNormalizer,
+    NormalizationStats,
+    PathNormalizer,
+    TextNormalizer,
+    TypeNormalizer,
+    ValueNormalizer,
+)
 from tooluse_gen.registry.response_schema import (
     DEFAULT_LIST_RESPONSE,
     DEFAULT_OBJECT_RESPONSE,
@@ -77,6 +85,13 @@ __all__ = [
     "ToolBenchLoaderError",
     "InvalidToolError",
     "MissingRequiredFieldError",
+    # Normalizers
+    "TextNormalizer",
+    "TypeNormalizer",
+    "PathNormalizer",
+    "ValueNormalizer",
+    "FieldNormalizer",
+    "NormalizationStats",
     # Default schemas
     "DEFAULT_LIST_RESPONSE",
     "DEFAULT_OBJECT_RESPONSE",
