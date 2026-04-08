@@ -15,6 +15,7 @@ from tooluse_gen.graph.diversity import (
     build_steering_prompt,
     should_steer,
 )
+from tooluse_gen.graph.facade import ToolChainSampler
 from tooluse_gen.graph.builder import GraphBuilder
 from tooluse_gen.graph.embeddings import (
     EmbeddingService,
@@ -88,6 +89,7 @@ __all__ = [
     "SamplingError",
     "SamplingConstraints",
     "ToolChain",
+    "ToolChainSampler",
     "ToolNode",
     "chain_to_description",
     "build_endpoint_description",
