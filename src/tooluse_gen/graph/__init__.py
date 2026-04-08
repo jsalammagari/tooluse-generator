@@ -25,6 +25,16 @@ from tooluse_gen.graph.persistence import (
     save_embeddings,
     save_graph,
 )
+from tooluse_gen.graph.queries import (
+    compute_node_importance,
+    get_chainable_endpoints,
+    get_connected_endpoints,
+    get_domain_endpoints,
+    get_endpoints_for_tool,
+    get_graph_stats,
+    get_neighbors,
+    get_tool_for_endpoint,
+)
 
 __all__ = [
     "EdgeType",
@@ -41,7 +51,15 @@ __all__ = [
     "ToolNode",
     "build_endpoint_description",
     "build_tool_description",
+    "compute_node_importance",
+    "get_chainable_endpoints",
+    "get_connected_endpoints",
+    "get_domain_endpoints",
+    "get_endpoints_for_tool",
     "get_graph_info",
+    "get_graph_stats",
+    "get_neighbors",
+    "get_tool_for_endpoint",
     "load_embeddings",
     "load_graph",
     "save_embeddings",
