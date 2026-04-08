@@ -61,6 +61,18 @@ from tooluse_gen.registry.response_schema import (
     flatten_response_fields,
     identify_extractable_type,
 )
+from tooluse_gen.registry.serialization import (
+    ChecksumError,
+    RegistryJSONSerializer,
+    RegistryPickleSerializer,
+    SerializationError,
+    SerializationFormat,
+    SerializationMetadata,
+    VersionIncompatibleError,
+    get_registry_info,
+    load_registry,
+    save_registry,
+)
 from tooluse_gen.registry.type_inference import (
     NAME_RULES,
     InferenceResult,
@@ -122,6 +134,17 @@ __all__ = [
     "RegistryStats",
     "get_random_tool",
     "get_random_endpoint",
+    # Serialization
+    "SerializationFormat",
+    "SerializationMetadata",
+    "RegistryJSONSerializer",
+    "RegistryPickleSerializer",
+    "save_registry",
+    "load_registry",
+    "get_registry_info",
+    "SerializationError",
+    "VersionIncompatibleError",
+    "ChecksumError",
     # Default schemas
     "DEFAULT_LIST_RESPONSE",
     "DEFAULT_OBJECT_RESPONSE",
