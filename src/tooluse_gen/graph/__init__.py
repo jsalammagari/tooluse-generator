@@ -1,5 +1,12 @@
 """Tool graph construction and traversal."""
 
+from tooluse_gen.graph.chain_models import (
+    ChainPattern,
+    ChainStep,
+    ParallelGroup,
+    SamplingConstraints,
+    ToolChain,
+)
 from tooluse_gen.graph.builder import GraphBuilder
 from tooluse_gen.graph.embeddings import (
     EmbeddingService,
@@ -37,6 +44,8 @@ from tooluse_gen.graph.queries import (
 )
 
 __all__ = [
+    "ChainPattern",
+    "ChainStep",
     "EdgeType",
     "EmbeddingService",
     "EndpointNode",
@@ -48,6 +57,9 @@ __all__ = [
     "GraphSerializationError",
     "GraphStats",
     "GraphVersionError",
+    "ParallelGroup",
+    "SamplingConstraints",
+    "ToolChain",
     "ToolNode",
     "build_endpoint_description",
     "build_tool_description",
