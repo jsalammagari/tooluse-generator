@@ -1,5 +1,6 @@
 """Tool graph construction and traversal."""
 
+from tooluse_gen.graph.builder import GraphBuilder
 from tooluse_gen.graph.embeddings import (
     EmbeddingService,
     build_endpoint_description,
@@ -18,6 +19,7 @@ __all__ = [
     "EdgeType",
     "EmbeddingService",
     "EndpointNode",
+    "GraphBuilder",
     "GraphConfig",
     "GraphEdge",
     "GraphStats",
