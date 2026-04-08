@@ -7,6 +7,11 @@ from tooluse_gen.graph.chain_models import (
     SamplingConstraints,
     ToolChain,
 )
+from tooluse_gen.graph.diversity import (
+    DiversityMetrics,
+    DiversitySteeringConfig,
+    DiversityTracker,
+)
 from tooluse_gen.graph.builder import GraphBuilder
 from tooluse_gen.graph.embeddings import (
     EmbeddingService,
@@ -56,6 +61,9 @@ from tooluse_gen.graph.queries import (
 __all__ = [
     "ChainPattern",
     "ChainStep",
+    "DiversityMetrics",
+    "DiversitySteeringConfig",
+    "DiversityTracker",
     "EdgeType",
     "EmbeddingService",
     "EndpointNode",
