@@ -54,6 +54,16 @@ from tooluse_gen.registry.response_schema import (
     flatten_response_fields,
     identify_extractable_type,
 )
+from tooluse_gen.registry.type_inference import (
+    NAME_RULES,
+    InferenceResult,
+    InferenceRule,
+    TypeEvidence,
+    infer_endpoint_parameter_types,
+)
+from tooluse_gen.registry.type_inference import (
+    ParameterTypeInferrer as HeuristicTypeInferrer,
+)
 
 __all__ = [
     # Enums
@@ -92,6 +102,13 @@ __all__ = [
     "ValueNormalizer",
     "FieldNormalizer",
     "NormalizationStats",
+    # Type inference
+    "InferenceRule",
+    "InferenceResult",
+    "TypeEvidence",
+    "NAME_RULES",
+    "HeuristicTypeInferrer",
+    "infer_endpoint_parameter_types",
     # Default schemas
     "DEFAULT_LIST_RESPONSE",
     "DEFAULT_OBJECT_RESPONSE",
