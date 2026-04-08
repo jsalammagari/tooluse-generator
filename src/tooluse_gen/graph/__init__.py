@@ -32,6 +32,11 @@ from tooluse_gen.graph.persistence import (
     save_embeddings,
     save_graph,
 )
+from tooluse_gen.graph.sampler import (
+    MCTSSampler,
+    SamplerConfig,
+    SamplingError,
+)
 from tooluse_gen.graph.queries import (
     compute_node_importance,
     get_chainable_endpoints,
@@ -57,7 +62,10 @@ __all__ = [
     "GraphSerializationError",
     "GraphStats",
     "GraphVersionError",
+    "MCTSSampler",
     "ParallelGroup",
+    "SamplerConfig",
+    "SamplingError",
     "SamplingConstraints",
     "ToolChain",
     "ToolNode",
