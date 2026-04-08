@@ -43,6 +43,13 @@ from tooluse_gen.registry.normalizers import (
     TypeNormalizer,
     ValueNormalizer,
 )
+from tooluse_gen.registry.registry import (
+    RegistryBuilder,
+    RegistryStats,
+    ToolRegistry,
+    get_random_endpoint,
+    get_random_tool,
+)
 from tooluse_gen.registry.response_schema import (
     DEFAULT_LIST_RESPONSE,
     DEFAULT_OBJECT_RESPONSE,
@@ -109,6 +116,12 @@ __all__ = [
     "NAME_RULES",
     "HeuristicTypeInferrer",
     "infer_endpoint_parameter_types",
+    # Registry
+    "ToolRegistry",
+    "RegistryBuilder",
+    "RegistryStats",
+    "get_random_tool",
+    "get_random_endpoint",
     # Default schemas
     "DEFAULT_LIST_RESPONSE",
     "DEFAULT_OBJECT_RESPONSE",
