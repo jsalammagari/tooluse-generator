@@ -32,6 +32,11 @@ from tooluse_gen.graph.persistence import (
     save_embeddings,
     save_graph,
 )
+from tooluse_gen.graph.patterns import (
+    PatternDetector,
+    PatternEnforcer,
+    chain_to_description,
+)
 from tooluse_gen.graph.sampler import (
     MCTSSampler,
     SamplerConfig,
@@ -64,11 +69,14 @@ __all__ = [
     "GraphVersionError",
     "MCTSSampler",
     "ParallelGroup",
+    "PatternDetector",
+    "PatternEnforcer",
     "SamplerConfig",
     "SamplingError",
     "SamplingConstraints",
     "ToolChain",
     "ToolNode",
+    "chain_to_description",
     "build_endpoint_description",
     "build_tool_description",
     "compute_node_importance",
