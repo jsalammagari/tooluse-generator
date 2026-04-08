@@ -14,6 +14,17 @@ from tooluse_gen.registry.completeness import (
     is_explicit_type,
     is_meaningful_description,
 )
+from tooluse_gen.registry.loader import (
+    InvalidToolError,
+    LoaderConfig,
+    LoaderStats,
+    MissingRequiredFieldError,
+    ParameterTypeInferrer,
+    RawToolParser,
+    ToolBenchLoader,
+    ToolBenchLoaderError,
+    ToolNormalizer,
+)
 from tooluse_gen.registry.models import (
     Endpoint,
     HttpMethod,
@@ -56,6 +67,16 @@ __all__ = [
     "DEFAULT_WEIGHTS",
     "CompletenessCalculator",
     "ScoreBreakdown",
+    # Loader
+    "LoaderConfig",
+    "LoaderStats",
+    "RawToolParser",
+    "ToolNormalizer",
+    "ParameterTypeInferrer",
+    "ToolBenchLoader",
+    "ToolBenchLoaderError",
+    "InvalidToolError",
+    "MissingRequiredFieldError",
     # Default schemas
     "DEFAULT_LIST_RESPONSE",
     "DEFAULT_OBJECT_RESPONSE",
