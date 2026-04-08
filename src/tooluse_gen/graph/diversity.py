@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import statistics
 from collections import Counter
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -219,3 +220,75 @@ class DiversityTracker:
         self.tool_pair_counts.clear()
         self.pattern_hashes.clear()
         self.total_conversations = 0
+
+
+# ---------------------------------------------------------------------------
+# Prompt steering helpers
+# ---------------------------------------------------------------------------
+
+_MAX_ITEMS_IN_PROMPT = 3
+
+
+def build_steering_prompt(
+    tracker: DiversityTracker,
+    available_domains: list[str],
+) -> str:
+    """Generate a prompt fragment steering toward underrepresented areas.
+
+    Returns an empty string when steering is disabled or diversity is
+    already sufficient.
+    """
+    if not tracker.config.enabled:
+        return ""
+
+    available_set = set(available_domains)
+
+    # Median domain count across available domains
+    domain_counts = [tracker.domain_counts[d] for d in available_domains]
+    median_domain = statistics.median(domain_counts) if domain_counts else 0.0
+
+    under_domains = [
+        d
+        for d in tracker.get_underrepresented_domains(threshold=median_domain)
+        if d in available_set
+    ]
+
+    if under_domains:
+        picked = under_domains[:_MAX_ITEMS_IN_PROMPT]
+        if len(picked) == 1:
+            return f"Focus this conversation on the {picked[0]} domain."
+        return (
+            "Focus this conversation on tools from these domains: "
+            + ", ".join(picked)
+            + "."
+        )
+
+    # Fall back to tool steering
+    tool_counts = list(tracker.tool_counts.values())
+    median_tool = statistics.median(tool_counts) if tool_counts else 0.0
+    under_tools = tracker.get_underrepresented_tools(threshold=median_tool)
+
+    if under_tools:
+        picked = under_tools[:_MAX_ITEMS_IN_PROMPT]
+        if len(picked) == 1:
+            return f"Try to use the {picked[0]} tool in this conversation."
+        return "Try to incorporate these tools: " + ", ".join(picked) + "."
+
+    return ""
+
+
+def build_diversity_summary(tracker: DiversityTracker) -> str:
+    """Human-readable one-line summary of current diversity state."""
+    if tracker.total_conversations == 0:
+        return "Diversity: no conversations generated yet"
+    metrics = tracker.get_diversity_metrics()
+    return (
+        f"Diversity: {tracker.total_conversations} conversations, "
+        f"entropy={metrics.tool_entropy:.2f}, "
+        f"coverage={metrics.domain_coverage:.0%}"
+    )
+
+
+def should_steer(config: DiversitySteeringConfig) -> bool:
+    """Return whether diversity steering is enabled."""
+    return config.enabled

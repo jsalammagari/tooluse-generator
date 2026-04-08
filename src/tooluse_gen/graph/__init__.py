@@ -11,6 +11,9 @@ from tooluse_gen.graph.diversity import (
     DiversityMetrics,
     DiversitySteeringConfig,
     DiversityTracker,
+    build_diversity_summary,
+    build_steering_prompt,
+    should_steer,
 )
 from tooluse_gen.graph.builder import GraphBuilder
 from tooluse_gen.graph.embeddings import (
@@ -65,6 +68,8 @@ __all__ = [
     "DiversitySteeringConfig",
     "DiversityTracker",
     "EdgeType",
+    "build_diversity_summary",
+    "build_steering_prompt",
     "EmbeddingService",
     "EndpointNode",
     "GraphBuilder",
@@ -100,4 +105,5 @@ __all__ = [
     "load_graph",
     "save_embeddings",
     "save_graph",
+    "should_steer",
 ]
