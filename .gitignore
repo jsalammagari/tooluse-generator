@@ -75,8 +75,13 @@ data/toolbench/
 data/*.json
 data/*.jsonl
 
-# Session transcripts
+# Session transcripts & planning files
 phase_1_7_to_2_1.txt
+tasks.txt
+prompts.txt
+
+# Data directory
+data/
 
 # Secrets
 .env

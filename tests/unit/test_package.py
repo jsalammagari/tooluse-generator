@@ -84,7 +84,7 @@ def test_cli_evaluate_invokes():
         "DESIGN.md",
         ".gitignore",
         ".env.example",
-        "data/.gitkeep",
+        "data/toolenv/tools",
         "output/.gitkeep",
         "tests/unit/__init__.py",
         "tests/integration/__init__.py",

@@ -339,6 +339,9 @@ class ToolNormalizer:
                 self._get_field(raw, "description", self.TOOL_FIELD_MAPPINGS) or ""
             )
             domain = str(self._get_field(raw, "domain", self.TOOL_FIELD_MAPPINGS) or "")
+            # Derive domain from source file path if not in the JSON
+            if not domain and source_file:
+                domain = self._domain_from_path(source_file)
             base_url = str(self._get_field(raw, "base_url", self.TOOL_FIELD_MAPPINGS) or "")
 
             raw_endpoints = self._get_field(raw, "endpoints", self.TOOL_FIELD_MAPPINGS)
@@ -385,26 +388,49 @@ class ToolNormalizer:
                 self._get_field(raw, "method", self.ENDPOINT_FIELD_MAPPINGS) or "GET"
             )
             method = _METHOD_MAP.get(method_raw.lower(), HttpMethod.GET)
-            path = str(self._get_field(raw, "path", self.ENDPOINT_FIELD_MAPPINGS) or "/")
+            raw_path = str(self._get_field(raw, "path", self.ENDPOINT_FIELD_MAPPINGS) or "/")
+            path = self._extract_path_from_url(raw_path)
 
             endpoint_id = generate_endpoint_id(tool_id, method.value, path)
 
-            raw_params = self._get_field(raw, "parameters", self.ENDPOINT_FIELD_MAPPINGS)
+            # Merge required_parameters + optional_parameters (ToolBench format)
+            # or fall back to a single "parameters" list
             parameters: list[Parameter] = []
             required_names: list[str] = []
-            if isinstance(raw_params, list):
-                for raw_p in raw_params:
+
+            req_params = raw.get("required_parameters")
+            opt_params = raw.get("optional_parameters")
+            if isinstance(req_params, list) or isinstance(opt_params, list):
+                for raw_p in req_params or []:
                     if isinstance(raw_p, dict):
+                        raw_p.setdefault("required", True)
                         p = self.normalize_parameter(raw_p)
+                        p.required = True
                         parameters.append(p)
-                        if p.required:
-                            required_names.append(p.name)
+                        required_names.append(p.name)
                     elif isinstance(raw_p, str):
-                        # Some formats list param names as strings
-                        parameters.append(
-                            Parameter(name=raw_p, required=True, has_description=False)
-                        )
+                        parameters.append(Parameter(name=raw_p, required=True))
                         required_names.append(raw_p)
+                for raw_p in opt_params or []:
+                    if isinstance(raw_p, dict):
+                        raw_p.setdefault("required", False)
+                        p = self.normalize_parameter(raw_p)
+                        p.required = False
+                        parameters.append(p)
+                    elif isinstance(raw_p, str):
+                        parameters.append(Parameter(name=raw_p, required=False))
+            else:
+                raw_params = self._get_field(raw, "parameters", self.ENDPOINT_FIELD_MAPPINGS)
+                if isinstance(raw_params, list):
+                    for raw_p in raw_params:
+                        if isinstance(raw_p, dict):
+                            p = self.normalize_parameter(raw_p)
+                            parameters.append(p)
+                            if p.required:
+                                required_names.append(p.name)
+                        elif isinstance(raw_p, str):
+                            parameters.append(Parameter(name=raw_p, required=True))
+                            required_names.append(raw_p)
 
             # Response schema (lightweight probe)
             response_schema = self._extract_response_schema(raw)
@@ -512,6 +538,15 @@ class ToolNormalizer:
     @staticmethod
     def _extract_response_schema(raw: dict[str, Any]) -> ResponseSchema | None:
         """Try to extract a lightweight response schema from *raw*."""
+        # ToolBench format: "schema" field with response structure
+        schema_val = raw.get("schema")
+        if isinstance(schema_val, dict) and schema_val:
+            status = raw.get("statuscode", 200)
+            return ResponseSchema(
+                status_code=int(status) if status else 200,
+                properties=schema_val,
+            )
+
         for key in ("response", "response_schema", "responses", "output"):
             val = raw.get(key)
             if val is None:
@@ -526,6 +561,35 @@ class ToolNormalizer:
             # Truthy but non-dict: at least mark that schema exists
             return ResponseSchema()
         return None
+
+    # -- path helpers -------------------------------------------------------
+
+    @staticmethod
+    def _extract_path_from_url(raw_path: str) -> str:
+        """Extract the path component from a value that might be a full URL."""
+        if raw_path.startswith(("http://", "https://")):
+            # Strip scheme + host → keep path
+            from urllib.parse import urlparse
+
+            parsed = urlparse(raw_path)
+            path = parsed.path or "/"
+            return path
+        return raw_path if raw_path else "/"
+
+    @staticmethod
+    def _domain_from_path(source_file: str) -> str:
+        """Derive a domain/category from the source file's parent directory.
+
+        Only activates when the path looks like a ToolBench layout, i.e.
+        contains ``toolenv/tools/<Category>/file.json``.  Returns ``""``
+        for paths that don't match this pattern.
+        """
+        parts = Path(source_file).parts
+        for i, part in enumerate(parts):
+            if part == "tools" and i + 2 < len(parts):
+                # parts[i] == "tools", parts[i+1] == category, parts[i+2] == file
+                return parts[i + 1].replace("_", " ")
+        return ""
 
 
 # ---------------------------------------------------------------------------
