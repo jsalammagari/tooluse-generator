@@ -1,5 +1,6 @@
 """Tool graph construction and traversal."""
 
+from tooluse_gen.graph.builder import GraphBuilder
 from tooluse_gen.graph.chain_models import (
     ChainPattern,
     ChainStep,
@@ -15,13 +16,12 @@ from tooluse_gen.graph.diversity import (
     build_steering_prompt,
     should_steer,
 )
-from tooluse_gen.graph.facade import ToolChainSampler
-from tooluse_gen.graph.builder import GraphBuilder
 from tooluse_gen.graph.embeddings import (
     EmbeddingService,
     build_endpoint_description,
     build_tool_description,
 )
+from tooluse_gen.graph.facade import ToolChainSampler
 from tooluse_gen.graph.models import (
     EdgeType,
     EndpointNode,
@@ -29,6 +29,11 @@ from tooluse_gen.graph.models import (
     GraphEdge,
     GraphStats,
     ToolNode,
+)
+from tooluse_gen.graph.patterns import (
+    PatternDetector,
+    PatternEnforcer,
+    chain_to_description,
 )
 from tooluse_gen.graph.persistence import (
     GraphChecksumError,
@@ -41,16 +46,6 @@ from tooluse_gen.graph.persistence import (
     save_embeddings,
     save_graph,
 )
-from tooluse_gen.graph.patterns import (
-    PatternDetector,
-    PatternEnforcer,
-    chain_to_description,
-)
-from tooluse_gen.graph.sampler import (
-    MCTSSampler,
-    SamplerConfig,
-    SamplingError,
-)
 from tooluse_gen.graph.queries import (
     compute_node_importance,
     get_chainable_endpoints,
@@ -61,6 +56,11 @@ from tooluse_gen.graph.queries import (
     get_neighbors,
     get_tool_for_endpoint,
 )
+from tooluse_gen.graph.sampler import (
+    MCTSSampler,
+    SamplerConfig,
+    SamplingError,
+)
 
 __all__ = [
     "ChainPattern",
@@ -69,8 +69,6 @@ __all__ = [
     "DiversitySteeringConfig",
     "DiversityTracker",
     "EdgeType",
-    "build_diversity_summary",
-    "build_steering_prompt",
     "EmbeddingService",
     "EndpointNode",
     "GraphBuilder",
@@ -86,14 +84,16 @@ __all__ = [
     "PatternDetector",
     "PatternEnforcer",
     "SamplerConfig",
-    "SamplingError",
     "SamplingConstraints",
+    "SamplingError",
     "ToolChain",
     "ToolChainSampler",
     "ToolNode",
-    "chain_to_description",
+    "build_diversity_summary",
     "build_endpoint_description",
+    "build_steering_prompt",
     "build_tool_description",
+    "chain_to_description",
     "compute_node_importance",
     "get_chainable_endpoints",
     "get_connected_endpoints",
