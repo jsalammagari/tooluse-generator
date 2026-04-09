@@ -21,6 +21,7 @@ from tooluse_gen.agents.grounding import (
     format_value_for_prompt,
 )
 from tooluse_gen.agents.tool_executor import ToolExecutor
+from tooluse_gen.agents.user_simulator import UserSimulator
 from tooluse_gen.agents.value_generator import (
     SchemaBasedGenerator,
     ValuePool,
@@ -39,6 +40,7 @@ __all__ = [
     "ToolCallRequest",
     "ToolCallResponse",
     "ToolExecutor",
+    "UserSimulator",
     "ValuePool",
     "ValueProvenance",
     "format_available_values",
