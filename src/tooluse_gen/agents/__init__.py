@@ -6,6 +6,13 @@ from tooluse_gen.agents.execution_models import (
     ToolCallRequest,
     ToolCallResponse,
 )
+from tooluse_gen.agents.grounding import (
+    GroundingTracker,
+    ValueProvenance,
+    format_available_values,
+    format_grounding_context,
+    format_value_for_prompt,
+)
 from tooluse_gen.agents.tool_executor import ToolExecutor
 from tooluse_gen.agents.value_generator import (
     SchemaBasedGenerator,
@@ -15,9 +22,14 @@ from tooluse_gen.agents.value_generator import (
 __all__ = [
     "ArgumentGenerator",
     "ConversationContext",
+    "GroundingTracker",
     "SchemaBasedGenerator",
     "ToolCallRequest",
     "ToolCallResponse",
     "ToolExecutor",
     "ValuePool",
+    "ValueProvenance",
+    "format_available_values",
+    "format_grounding_context",
+    "format_value_for_prompt",
 ]
