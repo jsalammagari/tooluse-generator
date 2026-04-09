@@ -5,9 +5,15 @@ from tooluse_gen.agents.execution_models import (
     ToolCallRequest,
     ToolCallResponse,
 )
+from tooluse_gen.agents.value_generator import (
+    SchemaBasedGenerator,
+    ValuePool,
+)
 
 __all__ = [
     "ConversationContext",
+    "SchemaBasedGenerator",
     "ToolCallRequest",
     "ToolCallResponse",
+    "ValuePool",
 ]
