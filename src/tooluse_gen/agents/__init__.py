@@ -1,5 +1,6 @@
 """Agent modules for conversation generation."""
 
+from tooluse_gen.agents.argument_generator import ArgumentGenerator
 from tooluse_gen.agents.execution_models import (
     ConversationContext,
     ToolCallRequest,
@@ -12,6 +13,7 @@ from tooluse_gen.agents.value_generator import (
 )
 
 __all__ = [
+    "ArgumentGenerator",
     "ConversationContext",
     "SchemaBasedGenerator",
     "ToolCallRequest",
