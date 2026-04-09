@@ -15,13 +15,20 @@ from tooluse_gen.agents.execution_models import (
     ToolCallRequest,
     ToolCallResponse,
 )
-from tooluse_gen.agents.orchestrator import ConversationOrchestrator, OrchestratorConfig
 from tooluse_gen.agents.grounding import (
     GroundingTracker,
     ValueProvenance,
     format_available_values,
     format_grounding_context,
     format_value_for_prompt,
+)
+from tooluse_gen.agents.orchestrator import ConversationOrchestrator, OrchestratorConfig
+from tooluse_gen.agents.state_machine import (
+    ConversationEvent,
+    ConversationState,
+    ConversationStateMachine,
+    InvalidTransitionError,
+    StateTransition,
 )
 from tooluse_gen.agents.tool_executor import ToolExecutor
 from tooluse_gen.agents.user_simulator import UserSimulator
@@ -38,14 +45,19 @@ __all__ = [
     "BatchStats",
     "Conversation",
     "ConversationContext",
+    "ConversationEvent",
     "ConversationMetadata",
     "ConversationOrchestrator",
+    "ConversationState",
+    "ConversationStateMachine",
     "GenerationConfig",
     "GroundingTracker",
+    "InvalidTransitionError",
     "JudgeScores",
     "Message",
     "OrchestratorConfig",
     "SchemaBasedGenerator",
+    "StateTransition",
     "ToolCallRequest",
     "ToolCallResponse",
     "ToolExecutor",

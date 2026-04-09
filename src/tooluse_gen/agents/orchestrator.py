@@ -21,6 +21,11 @@ from tooluse_gen.agents.conversation_models import (
 )
 from tooluse_gen.agents.execution_models import ConversationContext
 from tooluse_gen.agents.grounding import GroundingTracker
+from tooluse_gen.agents.state_machine import (
+    ConversationEvent,
+    ConversationState,
+    ConversationStateMachine,
+)
 from tooluse_gen.agents.tool_executor import ToolExecutor
 from tooluse_gen.agents.user_simulator import UserSimulator
 from tooluse_gen.graph.chain_models import ChainStep, ParallelGroup, ToolChain
@@ -147,26 +152,44 @@ class ConversationOrchestrator:
         rng: np.random.Generator,
         gen_config: GenerationConfig,
     ) -> None:
+        sm = ConversationStateMachine()
+        sm.transition(ConversationEvent.START)
+
         # Step 1: initial user request.
         msg = self._user_sim.generate_initial_request(chain, context, rng)
         conv.add_user_message(msg)
         context.add_message("user", msg)
+        sm.transition(ConversationEvent.USER_MESSAGE)
 
         flat = _flatten_steps(chain)
 
         # Step 2: main loop.
         safety = gen_config.max_turns + 10  # hard guard against infinite loops
         iterations = 0
-        while not self._is_complete(context, conv, gen_config, flat):
+        while not sm.is_terminal:
             iterations += 1
             if iterations > safety:
                 self._logger.warning("Safety limit reached, breaking loop.")
+                sm.transition(ConversationEvent.ERROR)
                 break
+
+            # Check completion before assistant turn.
+            if conv.turn_count >= gen_config.max_turns:
+                sm.transition(ConversationEvent.MAX_TURNS_REACHED)
+                break
+            if context.current_step >= len(flat):
+                sm.transition(ConversationEvent.CHAIN_COMPLETE)
+                break
+
+            # Ensure we're in ASSISTANT_TURN before generating a response.
+            if sm.state == ConversationState.USER_TURN:
+                sm.transition(ConversationEvent.USER_MESSAGE)
 
             resp = self._assistant.generate_response(context, rng, gen_config)
 
             # Disambiguation.
             if resp.is_disambiguation:
+                sm.transition(ConversationEvent.ASSISTANT_DISAMBIGUATE)
                 conv.add_assistant_message(content=resp.content)
                 context.add_message("assistant", resp.content or "")
                 clarif = self._user_sim.generate_clarification_response(
@@ -174,10 +197,12 @@ class ConversationOrchestrator:
                 )
                 conv.add_user_message(clarif)
                 context.add_message("user", clarif)
+                sm.transition(ConversationEvent.USER_CLARIFICATION)
                 continue
 
             # Tool calls.
             if resp.tool_calls:
+                sm.transition(ConversationEvent.ASSISTANT_TOOL_CALL)
                 conv.add_assistant_message(tool_calls=resp.tool_calls)
                 context.add_message("assistant", "", tool_calls=[
                     {"endpoint": tc.endpoint_id, "arguments": tc.arguments}
@@ -195,6 +220,12 @@ class ConversationOrchestrator:
                     )
 
                 context.advance_step()
+                sm.transition(ConversationEvent.TOOL_RESULT)
+
+                # Check if chain is complete after execution.
+                if context.current_step >= len(flat):
+                    sm.transition(ConversationEvent.CHAIN_COMPLETE)
+                    break
 
                 # Optional user follow-up between steps.
                 remaining = len(flat) - context.current_step
@@ -202,15 +233,18 @@ class ConversationOrchestrator:
                     follow = self._user_sim.generate_follow_up(context, rng)
                     conv.add_user_message(follow)
                     context.add_message("user", follow)
+                    sm.transition(ConversationEvent.USER_MESSAGE)
                 continue
 
             # Final answer.
             if resp.is_final_answer:
+                sm.transition(ConversationEvent.ASSISTANT_FINAL)
                 conv.add_assistant_message(content=resp.content)
                 context.add_message("assistant", resp.content or "")
                 break
 
             # Plain text response.
+            sm.transition(ConversationEvent.ASSISTANT_TEXT)
             conv.add_assistant_message(content=resp.content)
             context.add_message("assistant", resp.content or "")
 
