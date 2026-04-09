@@ -2,6 +2,7 @@
 
 from tooluse_gen.agents.argument_generator import ArgumentGenerator
 from tooluse_gen.agents.assistant_agent import AssistantAgent, AssistantResponse
+from tooluse_gen.agents.batch_generator import BatchGenerator, BatchStats
 from tooluse_gen.agents.conversation_models import (
     Conversation,
     ConversationMetadata,
@@ -33,6 +34,8 @@ __all__ = [
     "ArgumentGenerator",
     "AssistantAgent",
     "AssistantResponse",
+    "BatchGenerator",
+    "BatchStats",
     "Conversation",
     "ConversationContext",
     "ConversationMetadata",
