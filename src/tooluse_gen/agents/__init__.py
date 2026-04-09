@@ -14,6 +14,7 @@ from tooluse_gen.agents.execution_models import (
     ToolCallRequest,
     ToolCallResponse,
 )
+from tooluse_gen.agents.orchestrator import ConversationOrchestrator, OrchestratorConfig
 from tooluse_gen.agents.grounding import (
     GroundingTracker,
     ValueProvenance,
@@ -35,10 +36,12 @@ __all__ = [
     "Conversation",
     "ConversationContext",
     "ConversationMetadata",
+    "ConversationOrchestrator",
     "GenerationConfig",
     "GroundingTracker",
     "JudgeScores",
     "Message",
+    "OrchestratorConfig",
     "SchemaBasedGenerator",
     "ToolCallRequest",
     "ToolCallResponse",
