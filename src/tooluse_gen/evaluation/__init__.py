@@ -9,9 +9,11 @@ from tooluse_gen.evaluation.models import (
     RepairNeeded,
     ValidationResult,
 )
+from tooluse_gen.evaluation.validator import ConversationValidator
 
 __all__ = [
     "Accepted",
+    "ConversationValidator",
     "EvaluationConfig",
     "EvaluationReport",
     "EvaluationResult",
