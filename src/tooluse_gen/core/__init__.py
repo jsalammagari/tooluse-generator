@@ -1,4 +1,4 @@
-"""Core package — configuration management, secrets, API clients, and output models."""
+"""Core package — configuration, secrets, API clients, output models, and reproducibility."""
 
 from tooluse_gen.core.clients import ClientManager
 from tooluse_gen.core.config import (
@@ -18,6 +18,13 @@ from tooluse_gen.core.output_models import (
     from_conversation,
     validate_conversation_record,
     validate_record,
+)
+from tooluse_gen.core.reproducibility import (
+    compare_configs,
+    embed_config_in_output,
+    ensure_reproducibility,
+    load_config_from_output,
+    serialize_run_config,
 )
 from tooluse_gen.core.secrets import (
     Secrets,
@@ -54,4 +61,10 @@ __all__ = [
     "from_conversation",
     "validate_record",
     "validate_conversation_record",
+    # Reproducibility
+    "serialize_run_config",
+    "embed_config_in_output",
+    "load_config_from_output",
+    "ensure_reproducibility",
+    "compare_configs",
 ]
