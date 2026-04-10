@@ -9,6 +9,7 @@ from a sampled :class:`ToolChain`.
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
@@ -117,7 +118,7 @@ class ConversationOrchestrator:
         self._tracker = GroundingTracker()
 
         t0 = time.monotonic()
-        self._run_loop(conv, context, chain, rng, gen_config)
+        loop_stats = self._run_loop(conv, context, chain, rng, gen_config)
 
         # Force final answer if required and missing.
         needs_final = (
@@ -137,6 +138,9 @@ class ConversationOrchestrator:
             generation_time_ms=generation_time_ms,
             attempt_number=attempt_number,
             config=self._config.model_dump(),
+            endpoints_called=loop_stats["endpoints_called"],
+            disambiguation_count=loop_stats["disambiguation_count"],
+            grounding_stats=loop_stats["grounding_stats"],
         )
         return conv
 
@@ -151,9 +155,16 @@ class ConversationOrchestrator:
         chain: ToolChain,
         rng: np.random.Generator,
         gen_config: GenerationConfig,
-    ) -> None:
+    ) -> dict[str, Any]:
         sm = ConversationStateMachine()
         sm.transition(ConversationEvent.START)
+
+        # Metadata tracking.
+        endpoints_called: list[str] = []
+        disambiguation_count = 0
+        grounded_args = 0
+        fresh_args = 0
+        total_args = 0
 
         # Step 1: initial user request.
         msg = self._user_sim.generate_initial_request(chain, context, rng)
@@ -190,6 +201,7 @@ class ConversationOrchestrator:
             # Disambiguation.
             if resp.is_disambiguation:
                 sm.transition(ConversationEvent.ASSISTANT_DISAMBIGUATE)
+                disambiguation_count += 1
                 conv.add_assistant_message(content=resp.content)
                 context.add_message("assistant", resp.content or "")
                 clarif = self._user_sim.generate_clarification_response(
@@ -210,6 +222,16 @@ class ConversationOrchestrator:
                 ])
 
                 for call in resp.tool_calls:
+                    endpoints_called.append(call.endpoint_id)
+                    # Count grounding before execution mutates context.
+                    available = context.get_available_values()
+                    for key in call.arguments:
+                        if key in available:
+                            grounded_args += 1
+                        else:
+                            fresh_args += 1
+                    total_args += len(call.arguments)
+
                     result = self._executor.execute(call, context, rng)
                     conv.add_tool_message(
                         tool_call_id=call.call_id, output=result.data
@@ -247,6 +269,16 @@ class ConversationOrchestrator:
             sm.transition(ConversationEvent.ASSISTANT_TEXT)
             conv.add_assistant_message(content=resp.content)
             context.add_message("assistant", resp.content or "")
+
+        return {
+            "endpoints_called": endpoints_called,
+            "disambiguation_count": disambiguation_count,
+            "grounding_stats": {
+                "grounded_args": grounded_args,
+                "fresh_args": fresh_args,
+                "total_args": total_args,
+            },
+        }
 
     # ------------------------------------------------------------------
     # Completion detection

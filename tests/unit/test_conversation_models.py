@@ -413,6 +413,61 @@ class TestConversationMetadata:
         assert restored.seed == 42
         assert restored.tools_used == ["a"]
 
+    def test_endpoints_called_default(self):
+        meta = ConversationMetadata()
+        assert meta.endpoints_called == []
+
+    def test_disambiguation_count_default(self):
+        meta = ConversationMetadata()
+        assert meta.disambiguation_count == 0
+
+    def test_grounding_stats_default(self):
+        meta = ConversationMetadata()
+        assert meta.grounding_stats == {}
+
+    def test_from_conversation_endpoints_called(self):
+        msgs = [
+            Message(role="user", content="hi"),
+            Message(
+                role="assistant",
+                tool_calls=[_make_tool_call_request(endpoint_id="a/search")],
+            ),
+            Message(role="tool", tool_output={"ok": True}),
+            Message(
+                role="assistant",
+                tool_calls=[_make_tool_call_request(endpoint_id="b/get")],
+            ),
+        ]
+        chain = _make_chain()
+        meta = ConversationMetadata.from_conversation(
+            msgs, chain, endpoints_called=["a/search", "b/get"]
+        )
+        assert meta.endpoints_called == ["a/search", "b/get"]
+
+    def test_from_conversation_endpoints_auto(self):
+        msgs = [
+            Message(
+                role="assistant",
+                tool_calls=[_make_tool_call_request(endpoint_id="x/get")],
+            ),
+        ]
+        chain = _make_chain()
+        meta = ConversationMetadata.from_conversation(msgs, chain)
+        assert meta.endpoints_called == ["x/get"]
+
+    def test_from_conversation_disambiguation_count(self):
+        chain = _make_chain()
+        meta = ConversationMetadata.from_conversation(
+            [], chain, disambiguation_count=3
+        )
+        assert meta.disambiguation_count == 3
+
+    def test_from_conversation_grounding_stats(self):
+        chain = _make_chain()
+        gs = {"grounded_args": 5, "fresh_args": 3, "total_args": 8}
+        meta = ConversationMetadata.from_conversation([], chain, grounding_stats=gs)
+        assert meta.grounding_stats == gs
+
 
 # ===================================================================
 # Conversation

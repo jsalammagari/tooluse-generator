@@ -463,6 +463,76 @@ class TestMetadata:
         conv = orchestrator.generate_conversation(chain, seed=123)
         assert conv.metadata.seed == 123
 
+    def test_endpoints_called(self, orchestrator, chain):
+        conv = orchestrator.generate_conversation(chain, seed=42)
+        assert isinstance(conv.metadata.endpoints_called, list)
+        assert len(conv.metadata.endpoints_called) >= 1
+        assert all(isinstance(e, str) for e in conv.metadata.endpoints_called)
+
+    def test_endpoints_called_order(self, registry, chain):
+        orch = ConversationOrchestrator(
+            user_sim=UserSimulator(),
+            assistant=AssistantAgent(registry=registry),
+            executor=ToolExecutor(registry),
+            config=OrchestratorConfig(require_disambiguation=False),
+        )
+        conv = orch.generate_conversation(chain, seed=42)
+        assert conv.metadata.endpoints_called[0] == "hotels/search"
+        if len(conv.metadata.endpoints_called) > 1:
+            assert conv.metadata.endpoints_called[1] == "hotels/book"
+
+    def test_disambiguation_count_zero(self, registry, chain):
+        orch = ConversationOrchestrator(
+            user_sim=UserSimulator(),
+            assistant=AssistantAgent(registry=registry),
+            executor=ToolExecutor(registry),
+            config=OrchestratorConfig(require_disambiguation=False),
+        )
+        conv = orch.generate_conversation(chain, seed=42)
+        assert conv.metadata.disambiguation_count == 0
+
+    def test_disambiguation_count_nonzero(self, registry, chain):
+        orch = ConversationOrchestrator(
+            user_sim=UserSimulator(),
+            assistant=AssistantAgent(registry=registry),
+            executor=ToolExecutor(registry),
+            config=OrchestratorConfig(
+                require_disambiguation=True, disambiguation_probability=1.0
+            ),
+        )
+        conv = orch.generate_conversation(chain, seed=42)
+        assert conv.metadata.disambiguation_count >= 1
+
+    def test_grounding_stats_present(self, orchestrator, chain):
+        conv = orchestrator.generate_conversation(chain, seed=42)
+        gs = conv.metadata.grounding_stats
+        assert isinstance(gs, dict)
+        assert "grounded_args" in gs
+        assert "fresh_args" in gs
+        assert "total_args" in gs
+
+    def test_grounding_stats_total(self, orchestrator, chain):
+        conv = orchestrator.generate_conversation(chain, seed=42)
+        gs = conv.metadata.grounding_stats
+        assert gs["total_args"] == gs["grounded_args"] + gs["fresh_args"]
+
+    def test_grounding_stats_positive(self, orchestrator, chain):
+        conv = orchestrator.generate_conversation(chain, seed=42)
+        gs = conv.metadata.grounding_stats
+        assert gs["total_args"] >= 1
+
+    def test_num_tool_calls_matches_endpoints(self, orchestrator, chain):
+        conv = orchestrator.generate_conversation(chain, seed=42)
+        assert conv.metadata.num_tool_calls == len(conv.metadata.endpoints_called)
+
+    def test_pattern_recorded(self, orchestrator, chain):
+        conv = orchestrator.generate_conversation(chain, seed=42)
+        assert conv.metadata.pattern == "sequential"
+
+    def test_generation_time_nonnegative(self, orchestrator, chain):
+        conv = orchestrator.generate_conversation(chain, seed=42)
+        assert conv.metadata.generation_time_ms >= 0
+
 
 # ===================================================================
 # Determinism

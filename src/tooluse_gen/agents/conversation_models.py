@@ -155,6 +155,16 @@ class ConversationMetadata(BaseModel):
     generation_time_ms: int = Field(default=0, description="Generation time (ms).")
     attempt_number: int = Field(default=1, description="Retry attempt that produced this.")
     config: dict[str, Any] = Field(default_factory=dict, description="Config snapshot.")
+    endpoints_called: list[str] = Field(
+        default_factory=list, description="Endpoint IDs called in order."
+    )
+    disambiguation_count: int = Field(
+        default=0, description="Number of disambiguation exchanges."
+    )
+    grounding_stats: dict[str, int] = Field(
+        default_factory=dict,
+        description="Grounding statistics: grounded_args, fresh_args, total_args.",
+    )
 
     @classmethod
     def from_conversation(
@@ -165,15 +175,20 @@ class ConversationMetadata(BaseModel):
         generation_time_ms: int = 0,
         attempt_number: int = 1,
         config: dict[str, Any] | None = None,
+        endpoints_called: list[str] | None = None,
+        disambiguation_count: int = 0,
+        grounding_stats: dict[str, int] | None = None,
     ) -> ConversationMetadata:
         """Compute metadata from *messages* and *chain*."""
         tool_ids: set[str] = set()
         tool_call_count = 0
+        ep_ids: list[str] = []
         for msg in messages:
             if msg.tool_calls:
                 tool_call_count += 1
                 for tc in msg.tool_calls:
                     tool_ids.add(tc.tool_id)
+                    ep_ids.append(tc.endpoint_id)
 
         sorted_tools = sorted(tool_ids)
         return cls(
@@ -187,6 +202,9 @@ class ConversationMetadata(BaseModel):
             generation_time_ms=generation_time_ms,
             attempt_number=attempt_number,
             config=config or {},
+            endpoints_called=endpoints_called if endpoints_called is not None else ep_ids,
+            disambiguation_count=disambiguation_count,
+            grounding_stats=grounding_stats or {},
         )
 
 
