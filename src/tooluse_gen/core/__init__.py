@@ -12,6 +12,7 @@ from tooluse_gen.core.config import (
     load_config,
     merge_cli_overrides,
 )
+from tooluse_gen.core.jsonl_io import JSONLReader, JSONLWriter
 from tooluse_gen.core.output_models import (
     ConversationRecord,
     from_conversation,
@@ -45,6 +46,9 @@ __all__ = [
     "validate_api_keys",
     # Clients
     "ClientManager",
+    # JSONL I/O
+    "JSONLReader",
+    "JSONLWriter",
     # Output models
     "ConversationRecord",
     "from_conversation",
