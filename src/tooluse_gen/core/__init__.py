@@ -1,5 +1,6 @@
 """Core package — configuration, secrets, API clients, output models, and reproducibility."""
 
+from tooluse_gen.core.cache import PromptCache
 from tooluse_gen.core.clients import ClientManager
 from tooluse_gen.core.config import (
     AppConfig,
@@ -36,6 +37,8 @@ from tooluse_gen.core.secrets import (
 )
 
 __all__ = [
+    # Cache
+    "PromptCache",
     # Config
     "AppConfig",
     "ModelConfig",
