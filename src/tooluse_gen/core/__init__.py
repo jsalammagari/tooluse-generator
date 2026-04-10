@@ -1,4 +1,4 @@
-"""Core package — configuration management, secrets, and API clients."""
+"""Core package — configuration management, secrets, API clients, and output models."""
 
 from tooluse_gen.core.clients import ClientManager
 from tooluse_gen.core.config import (
@@ -11,6 +11,12 @@ from tooluse_gen.core.config import (
     export_config,
     load_config,
     merge_cli_overrides,
+)
+from tooluse_gen.core.output_models import (
+    ConversationRecord,
+    from_conversation,
+    validate_conversation_record,
+    validate_record,
 )
 from tooluse_gen.core.secrets import (
     Secrets,
@@ -39,4 +45,9 @@ __all__ = [
     "validate_api_keys",
     # Clients
     "ClientManager",
+    # Output models
+    "ConversationRecord",
+    "from_conversation",
+    "validate_record",
+    "validate_conversation_record",
 ]
