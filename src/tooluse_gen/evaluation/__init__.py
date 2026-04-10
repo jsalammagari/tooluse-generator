@@ -10,16 +10,19 @@ from tooluse_gen.evaluation.models import (
     RepairNeeded,
     ValidationResult,
 )
+from tooluse_gen.evaluation.repair import RepairLoop, RepairStats
 from tooluse_gen.evaluation.validator import ConversationValidator
 
 __all__ = [
     "Accepted",
     "ConversationValidator",
-    "JudgeAgent",
     "EvaluationConfig",
     "EvaluationReport",
     "EvaluationResult",
+    "JudgeAgent",
     "JudgeScores",
+    "RepairLoop",
     "RepairNeeded",
+    "RepairStats",
     "ValidationResult",
 ]
