@@ -18,7 +18,12 @@ pip install -e ".[dev]"
 
 # Copy and fill in your API keys (optional — offline mode works without them)
 cp .env.example .env
+
+# Verify installation
+tooluse --help
 ```
+
+> **Requires Python 3.10+.** The `sentence-transformers` embedding model (~90 MB) downloads automatically on the first `tooluse build` run.
 
 ## Quick Start
 
@@ -87,16 +92,35 @@ tooluse evaluate output/conversations.jsonl --format table
 
 ## Configuration
 
-Edit `config/default.yaml` to tune:
+All settings live in `config/default.yaml`. Override via `--config path/to/custom.yaml` or `--config-from prev_output.jsonl`.
 
-- **models** — LLM identifiers for assistant, judge, user simulator, and embeddings
-- **quality** — `min_score` threshold, `max_retries`, scoring dimensions
-- **sampling** — `min_steps`, `max_steps`, `similarity_threshold`, domain filters
-- **diversity** — `enabled`, `weight_decay`, `min_domain_coverage`
-- **paths** — `build_dir`, `output_dir`, `cache_dir`
-- **seed** — global random seed (default: 42)
+### Configuration Fields
 
-Environment variables in `.env` override API keys. The pipeline works fully offline without API keys using template-based agents and heuristic scoring.
+| Section | Field | Default | Description |
+|---------|-------|---------|-------------|
+| `models` | `assistant` | `"gpt-4o"` | LLM for the assistant agent |
+| `models` | `judge` | `"gpt-4o"` | LLM for quality scoring |
+| `models` | `user_simulator` | `"gpt-4o-mini"` | LLM for user message generation |
+| `models` | `mock_generator` | `"gpt-4o-mini"` | LLM for mock tool responses |
+| `models` | `embedding` | `"all-MiniLM-L6-v2"` | Sentence-transformer for semantic edges |
+| `quality` | `min_score` | `3.5` | Minimum average judge score to accept (1.0–5.0) |
+| `quality` | `max_retries` | `3` | Maximum repair attempts per conversation |
+| `quality` | `dimensions` | `[tool_correctness, ...]` | Scoring dimensions (order matters for prompts) |
+| `sampling` | `min_steps` | `2` | Minimum tool calls per conversation |
+| `sampling` | `max_steps` | `5` | Maximum tool calls per conversation |
+| `sampling` | `similarity_threshold` | `0.7` | Cosine threshold for semantic graph edges (0–1) |
+| `sampling` | `domains` | `null` | Restrict to these domains; `null` = use all |
+| `sampling` | `excluded_tools` | `null` | Tool endpoint IDs to exclude; `null` = none |
+| `diversity` | `enabled` | `true` | Enable cross-conversation diversity steering |
+| `diversity` | `weight_decay` | `0.9` | Inverse-frequency decay for tool weights (0–1) |
+| `diversity` | `min_domain_coverage` | `0.5` | Target domain coverage fraction before repeating |
+| `paths` | `build_dir` | `"./output/build"` | Build artifacts directory |
+| `paths` | `output_dir` | `"./output"` | Output root directory |
+| `paths` | `cache_dir` | `"./.cache"` | Intermediate cache directory |
+| *(root)* | `seed` | `42` | Global random seed for reproducibility |
+| *(root)* | `verbose` | `0` | Verbosity level (0 = normal, 1 = info, 2 = debug) |
+
+Environment variables in `.env` override API keys. The pipeline works fully offline without API keys — all agents use template-based generation and heuristic scoring when no LLM client is configured.
 
 ## Output Format
 
@@ -236,6 +260,29 @@ pytest tests/integration/test_retry_repair.py -v
 # With coverage
 pytest --cov=tooluse_gen --cov-report=term-missing
 ```
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| `ModuleNotFoundError: tooluse_gen` | Run `pip install -e ".[dev]"` from the project root |
+| Build fails: "No tools passed quality filter" | Check `--input-dir` points to valid ToolBench data. The default FAIR filter excludes poorly documented tools |
+| Generate fails: "Build directory does not exist" | Run `tooluse build` first to create artifacts in `--build-dir` |
+| Generate produces 0 conversations | Graph may be too sparse. Try `--min-steps 1 --max-steps 2` or lower `--similarity-threshold 0.1` during build |
+| `EmbeddingService` download fails | The `all-MiniLM-L6-v2` model downloads on first use (~90 MB). Ensure internet access, or set `--similarity-threshold 0` to skip semantic edges |
+| Evaluate reports all "invalid" | The structural validator checks for tool calls, role alternation, etc. Offline-generated conversations may not pass all checks — this is expected |
+| `--config-from` fails | The JSONL must have a metadata header (first line with `__metadata__: true`). Files from `tooluse generate` include this automatically |
+| Tests show `SKIPPED` | E2E tests require `pytest --run-e2e`. Without this flag they are skipped by design |
+| Slow build with full ToolBench | Use `--categories` with the experiment script to work with a subset, or pass a filtered `--input-dir` |
+
+### Environment Requirements
+
+- **Python**: 3.10 or later
+- **OS**: macOS, Linux, Windows (tested on macOS and Linux)
+- **Disk**: ~100 MB for ToolBench data, ~50 MB for build artifacts
+- **Network**: Only needed for first-time embedding model download and LLM API calls (optional)
 
 ## Project Structure
 
