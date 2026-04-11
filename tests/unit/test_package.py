@@ -44,26 +44,28 @@ def test_cli_help():
 
 
 def test_cli_build_invokes():
-    # --input-dir is now required
-    result = RUNNER.invoke(app, ["build", "--input-dir", "data/toolbench"])
-    assert result.exit_code == 0
-    assert "Not implemented yet" in result.output
+    # Build with non-existent input dir should fail gracefully (exit 1)
+    result = RUNNER.invoke(app, ["build", "--input-dir", "/tmp/nonexistent_dir_xyz"])
+    assert result.exit_code == 1
 
 
 def test_cli_generate_defaults():
-    # --output is now required; seed/steering shown in rich table
-    result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl"])
-    assert result.exit_code == 0
-    assert "42" in result.output  # default seed
-    assert "True" in result.output  # steering on by default
+    # Generate with default build-dir that doesn't exist should fail gracefully
+    result = RUNNER.invoke(
+        app, ["generate", "--output", "out.jsonl", "--build-dir", "/tmp/nope"]
+    )
+    assert result.exit_code == 1
+    assert "42" in result.output  # default seed shown in table before error
 
 
 def test_cli_generate_no_steering():
     result = RUNNER.invoke(
-        app, ["generate", "--output", "out.jsonl", "--no-cross-conversation-steering"]
+        app,
+        ["generate", "--output", "out.jsonl", "--no-cross-conversation-steering",
+         "--build-dir", "/tmp/nope"],
     )
-    assert result.exit_code == 0
-    assert "False" in result.output  # steering disabled
+    assert result.exit_code == 1
+    assert "False" in result.output  # steering disabled shown in table
 
 
 def test_cli_evaluate_invokes():

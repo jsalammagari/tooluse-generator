@@ -37,21 +37,19 @@ def test_build_help():
         assert flag in result.output
 
 
-def test_build_stub_output():
-    result = RUNNER.invoke(app, ["build", "--input-dir", "data/toolbench"])
-    assert result.exit_code == 0
-    assert "Not implemented yet" in result.output
+def test_build_rejects_missing_input_dir():
+    result = RUNNER.invoke(app, ["build", "--input-dir", "/tmp/nonexistent_dir_xyz"])
+    # Build now validates input_dir exists — non-existent path should fail
+    assert result.exit_code != 0
 
 
-def test_build_shows_options_in_output():
+def test_build_shows_options_in_panel():
     result = RUNNER.invoke(
         app,
-        ["build", "--input-dir", "data/toolbench", "--output-dir", "out/build", "--force"],
+        ["build", "--input-dir", "/tmp/nonexistent_dir_xyz"],
     )
-    assert result.exit_code == 0
-    assert "data/toolbench" in result.output
-    # Path normalises "out/build" — check the directory name appears
-    assert "out" in result.output
+    # Panel is still printed even when the build later fails
+    assert "tooluse build" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -75,24 +73,26 @@ def test_generate_help():
         assert flag in result.output
 
 
-def test_generate_stub_output():
-    result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl"])
-    assert result.exit_code == 0
-    assert "Not implemented yet" in result.output
+def test_generate_rejects_missing_build_dir():
+    result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl", "--build-dir", "/tmp/nope"])
+    # Generate now validates build_dir — non-existent path should fail
+    assert result.exit_code != 0
 
 
-def test_generate_steering_flag():
+def test_generate_steering_flag_shown():
     result = RUNNER.invoke(
-        app, ["generate", "--output", "out.jsonl", "--no-cross-conversation-steering"]
+        app,
+        ["generate", "--output", "out.jsonl", "--no-cross-conversation-steering",
+         "--build-dir", "/tmp/nope"],
     )
-    assert result.exit_code == 0
-    assert "False" in result.output  # steering disabled
+    # Table is still printed showing steering=False before the build-dir error
+    assert "False" in result.output
 
 
-def test_generate_steering_on_by_default():
-    result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl"])
-    assert result.exit_code == 0
-    assert "True" in result.output  # steering enabled by default
+def test_generate_steering_on_by_default_shown():
+    result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl", "--build-dir", "/tmp/nope"])
+    # Table is still printed showing steering=True before the build-dir error
+    assert "True" in result.output
 
 
 def test_generate_invalid_steps_order():
@@ -104,15 +104,18 @@ def test_generate_invalid_steps_order():
 
 def test_generate_domains_parsed():
     result = RUNNER.invoke(
-        app, ["generate", "--output", "out.jsonl", "--domains", "Travel,Finance"]
+        app, ["generate", "--output", "out.jsonl", "--domains", "Travel,Finance",
+              "--build-dir", "/tmp/nope"]
     )
-    assert result.exit_code == 0
+    # Table shows domains even though build_dir doesn't exist
     assert "Travel" in result.output
 
 
-def test_generate_defaults():
-    result = RUNNER.invoke(app, ["generate", "--output", "out.jsonl"])
-    assert result.exit_code == 0
+def test_generate_defaults_shown():
+    result = RUNNER.invoke(
+        app, ["generate", "--output", "out.jsonl", "--build-dir", "/tmp/nope"]
+    )
+    # Table shows defaults even though build_dir doesn't exist
     assert "100" in result.output  # default count
     assert "42" in result.output  # default seed
     assert "3.5" in result.output  # default quality-threshold
@@ -161,16 +164,16 @@ def test_evaluate_rescore_flag():
 # Global options
 # ---------------------------------------------------------------------------
 def test_global_quiet_suppresses_panel():
-    result = RUNNER.invoke(app, ["--quiet", "build", "--input-dir", "data/"])
-    assert result.exit_code == 0
-    # Panel/table not rendered; only stub line
-    assert "Not implemented yet" in result.output
-    assert "input-dir" not in result.output
+    result = RUNNER.invoke(app, ["--quiet", "build", "--input-dir", "/tmp/nonexistent_dir_xyz"])
+    # In quiet mode the panel should NOT appear
+    assert "tooluse build" not in result.output
 
 
 def test_global_config_option():
-    result = RUNNER.invoke(app, ["--config", "my_config.yaml", "build", "--input-dir", "data/"])
-    assert result.exit_code == 0
+    result = RUNNER.invoke(
+        app, ["--config", "my_config.yaml", "build", "--input-dir", "/tmp/nonexistent_dir_xyz"]
+    )
+    # Config option should be visible in the panel even though build will fail
     assert "my_config.yaml" in result.output
 
 

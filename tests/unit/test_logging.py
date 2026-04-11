@@ -308,8 +308,9 @@ def test_cli_callback_calls_setup_logging():
     from tooluse_gen.cli.main import app
 
     runner = CliRunner()
-    result = runner.invoke(app, ["-vv", "build", "--input-dir", "data/"])
-    assert result.exit_code == 0
+    result = runner.invoke(app, ["-vv", "build", "--input-dir", "/tmp/nonexistent_dir_xyz"])
+    # Build fails because input dir doesn't exist, but logging was still set up
+    assert result.exit_code != 0
     # At verbosity 2 the root logger should be at DEBUG level
     root = logging.getLogger("tooluse_gen")
     assert root.level <= logging.DEBUG
