@@ -555,8 +555,10 @@ def generate(
         sampler = ToolChainSampler(graph, diversity_config=diversity_config)
 
         # ----------------------------------------------------------
-        # Step 6: Generate conversations
+        # Step 6: Generate conversations (with interrupt handling)
         # ----------------------------------------------------------
+        from tooluse_gen.cli.progress import InterruptHandler
+
         constraints = SamplingConstraints(
             min_steps=min_steps,
             max_steps=max_steps,
@@ -566,10 +568,19 @@ def generate(
         batch_gen = BatchGenerator(
             orchestrator=orchestrator, sampler=sampler, diversity_config=diversity_config,
         )
-        conversations = batch_gen.generate_batch(
-            count=count, constraints=constraints, seed=seed, steering_enabled=steering,
-        )
-        batch_stats = batch_gen.get_batch_stats()
+
+        interrupt = InterruptHandler()
+        with interrupt:
+            conversations = batch_gen.generate_batch(
+                count=count, constraints=constraints, seed=seed, steering_enabled=steering,
+            )
+            batch_stats = batch_gen.get_batch_stats()
+
+        if interrupt.interrupted and not quiet:
+            console.print(
+                f"  [bold yellow]⚠[/bold yellow] Interrupted after "
+                f"[bold]{len(conversations)}[/bold]/{count} conversations"
+            )
 
         if not quiet:
             console.print(
