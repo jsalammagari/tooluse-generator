@@ -37,6 +37,7 @@ _state: dict[str, object] = {
     "verbose": 0,
     "quiet": False,
     "config": Path("config/default.yaml"),
+    "config_from": None,
 }
 
 
@@ -64,13 +65,46 @@ def main(
             exists=False,  # don't error if missing — commands will validate
         ),
     ] = Path("config/default.yaml"),
+    config_from: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-from",
+            help="Load config from a previous output JSONL for reproducibility.",
+            exists=True,
+        ),
+    ] = None,
 ) -> None:
     """[bold]tooluse-generator[/bold]: build → generate → evaluate."""
     _state["verbose"] = verbose
     _state["quiet"] = quiet
     _state["config"] = config
+    _state["config_from"] = config_from
     setup_logging(verbosity=verbose, quiet=quiet)
-    logger.debug("CLI started: verbosity=%d quiet=%s config=%s", verbose, quiet, config)
+    logger.debug(
+        "CLI started: verbosity=%d quiet=%s config=%s config_from=%s",
+        verbose, quiet, config, config_from,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _load_app_config() -> object:
+    """Load AppConfig respecting ``--config`` and ``--config-from`` flags."""
+    from tooluse_gen.core.config import AppConfig, load_config
+
+    config_from = _state.get("config_from")
+    if config_from is not None:
+        from tooluse_gen.core.reproducibility import load_config_from_output
+
+        run_config = load_config_from_output(config_from)
+        raw = run_config.get("config", {})
+        return AppConfig(**raw) if raw else load_config()
+
+    config_path = Path(str(_state["config"]))
+    return load_config(str(config_path) if config_path.exists() else None)
 
 
 # ---------------------------------------------------------------------------
@@ -403,6 +437,10 @@ def generate(
             help="Minimum average LLM-as-judge score to accept a conversation (0–5).",
         ),
     ] = 3.5,
+    no_cache: Annotated[
+        bool,
+        typer.Option("--no-cache", help="Disable prompt caching."),
+    ] = False,
 ) -> None:
     """Generate synthetic conversations with tool use."""
     if min_steps > max_steps:
@@ -411,6 +449,7 @@ def generate(
 
     set_global_seed(seed)
     logger.info("Initialized with seed: %d", seed)
+    logger.info("Cache: %s", "disabled" if no_cache else "enabled")
 
     steering = not no_cross_conversation_steering
     domain_list = [d.strip() for d in domains.split(",")] if domains else []
@@ -427,6 +466,7 @@ def generate(
             ("steps", f"{min_steps}–{max_steps}"),
             ("domains", ", ".join(domain_list) if domain_list else "(all)"),
             ("steering", str(steering)),
+            ("cache", "disabled" if no_cache else "enabled"),
             ("max-retries", str(max_retries)),
             ("quality-threshold", str(quality_threshold)),
             ("config", str(_state["config"])),
@@ -441,7 +481,6 @@ def generate(
     from tooluse_gen.agents.orchestrator import ConversationOrchestrator
     from tooluse_gen.agents.tool_executor import ToolExecutor
     from tooluse_gen.agents.user_simulator import UserSimulator
-    from tooluse_gen.core.config import load_config
     from tooluse_gen.core.jsonl_io import JSONLWriter
     from tooluse_gen.core.output_models import from_conversation
     from tooluse_gen.core.reproducibility import embed_config_in_output, serialize_run_config
@@ -497,8 +536,7 @@ def generate(
         # ----------------------------------------------------------
         # Step 3: Load config
         # ----------------------------------------------------------
-        config_path = Path(str(_state["config"]))
-        app_config = load_config(str(config_path) if config_path.exists() else None)
+        app_config = _load_app_config()
 
         # ----------------------------------------------------------
         # Step 4: Initialize agents (offline mode, no LLM)
@@ -570,8 +608,8 @@ def generate(
         cli_args = {
             "count": count, "seed": seed, "min_steps": min_steps,
             "max_steps": max_steps, "domains": domain_list,
-            "steering": steering, "max_retries": max_retries,
-            "quality_threshold": quality_threshold,
+            "steering": steering, "cache": not no_cache,
+            "max_retries": max_retries, "quality_threshold": quality_threshold,
         }
         run_config = serialize_run_config(app_config, seed, cli_args=cli_args)
 
