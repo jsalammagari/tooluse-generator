@@ -1,5 +1,14 @@
 """Evaluation pipeline for conversation quality scoring."""
 
+from tooluse_gen.evaluation.diversity_report import (
+    ComparisonReport,
+    RunMetrics,
+    compute_run_metrics,
+    format_json,
+    format_markdown,
+    generate_comparison_report,
+    load_and_compute,
+)
 from tooluse_gen.evaluation.judge import JudgeAgent
 from tooluse_gen.evaluation.models import (
     Accepted,
@@ -16,6 +25,7 @@ from tooluse_gen.evaluation.validator import ConversationValidator
 
 __all__ = [
     "Accepted",
+    "ComparisonReport",
     "ConversationValidator",
     "EvaluationConfig",
     "EvaluationPipeline",
@@ -26,5 +36,11 @@ __all__ = [
     "RepairLoop",
     "RepairNeeded",
     "RepairStats",
+    "RunMetrics",
     "ValidationResult",
+    "compute_run_metrics",
+    "format_json",
+    "format_markdown",
+    "generate_comparison_report",
+    "load_and_compute",
 ]
