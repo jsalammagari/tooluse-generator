@@ -69,10 +69,9 @@ def test_cli_generate_no_steering():
 
 
 def test_cli_evaluate_invokes():
-    # INPUT is now a required positional argument
-    result = RUNNER.invoke(app, ["evaluate", "conversations.jsonl"])
-    assert result.exit_code == 0
-    assert "Not implemented yet" in result.output
+    # Evaluate with non-existent file should fail gracefully (exit 1)
+    result = RUNNER.invoke(app, ["evaluate", "/tmp/nonexistent_xyz.jsonl"])
+    assert result.exit_code == 1
 
 
 @pytest.mark.parametrize(

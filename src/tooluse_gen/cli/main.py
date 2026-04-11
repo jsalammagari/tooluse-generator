@@ -695,7 +695,9 @@ def evaluate(
         err_console.print(f"--format must be one of: {', '.join(sorted(valid_formats))}")
         raise typer.Exit(code=1)
 
-    if not _state["quiet"]:
+    quiet = bool(_state["quiet"])
+
+    if not quiet:
         console.print(
             Panel.fit(
                 f"[bold cyan]evaluate[/bold cyan]\n"
@@ -707,7 +709,275 @@ def evaluate(
                 title="tooluse evaluate",
             )
         )
-    typer.echo("Not implemented yet")
+
+    # Late imports
+    import json as _json
+    import math
+    from collections import Counter
+
+    from tooluse_gen.agents.conversation_models import Conversation, Message
+    from tooluse_gen.core.jsonl_io import JSONLReader, JSONLWriter
+    from tooluse_gen.core.output_models import ConversationRecord
+    from tooluse_gen.evaluation.judge import JudgeAgent
+    from tooluse_gen.evaluation.models import EvaluationConfig, JudgeScores
+    from tooluse_gen.evaluation.pipeline import EvaluationPipeline
+    from tooluse_gen.evaluation.validator import ConversationValidator
+
+    t0 = time.perf_counter()
+
+    try:
+        # ----------------------------------------------------------
+        # Step 1: Validate inputs
+        # ----------------------------------------------------------
+        if not input_path.is_file():
+            err_console.print(f"Input file does not exist: {input_path}")
+            raise typer.Exit(code=1)
+
+        # ----------------------------------------------------------
+        # Step 2: Load conversations
+        # ----------------------------------------------------------
+        reader = JSONLReader(input_path)
+        records = reader.read_all()
+
+        if not records:
+            err_console.print("No conversation records found in input file.")
+            raise typer.Exit(code=1)
+
+        if not quiet:
+            console.print(
+                f"  [bold green]✓[/bold green] Loaded "
+                f"[bold]{len(records)}[/bold] conversations from {input_path}"
+            )
+
+        # ----------------------------------------------------------
+        # Step 3: Convert records to Conversations
+        # ----------------------------------------------------------
+        def _record_to_conversation(rec: ConversationRecord) -> Conversation:
+            msgs: list[Message] = []
+            for md in rec.messages:
+                raw_content = md.get("content")
+                # Tool messages may have dict content — convert to string
+                if isinstance(raw_content, dict):
+                    content: str | None = _json.dumps(raw_content, default=str)
+                else:
+                    content = raw_content
+                msgs.append(Message(role=md["role"], content=content))
+            return Conversation(
+                conversation_id=rec.conversation_id,
+                messages=msgs,
+            )
+
+        conversations = [_record_to_conversation(r) for r in records]
+
+        # ----------------------------------------------------------
+        # Step 4: Validate
+        # ----------------------------------------------------------
+        validator = ConversationValidator()
+        valid_count = 0
+        invalid_count = 0
+        for conv in conversations:
+            vr = validator.validate(conv)
+            if vr.valid:
+                valid_count += 1
+            else:
+                invalid_count += 1
+
+        if not quiet:
+            console.print(
+                f"  [bold green]✓[/bold green] Validated: "
+                f"[bold]{valid_count}[/bold] passed, "
+                f"[bold]{invalid_count}[/bold] issues"
+            )
+
+        # ----------------------------------------------------------
+        # Step 5: Score
+        # ----------------------------------------------------------
+        judge = JudgeAgent()
+        need_scoring = rescore or any(r.judge_scores is None for r in records)
+
+        if need_scoring:
+            scores = judge.score_batch(conversations)
+        else:
+            scores = [
+                JudgeScores(**r.judge_scores)  # type: ignore[arg-type]
+                for r in records
+                if r.judge_scores is not None
+            ]
+
+        if not quiet:
+            label = "rescored" if rescore else "scored"
+            console.print(
+                f"  [bold green]✓[/bold green] {label.capitalize()} "
+                f"[bold]{len(scores)}[/bold] conversations (offline judge)"
+            )
+
+        # Aggregate scores
+        avg_scores = judge.aggregate_scores(scores) if scores else None
+
+        # Build evaluation report via pipeline for pass/fail stats
+        eval_config = EvaluationConfig(min_score=3.5)
+        pipeline = EvaluationPipeline(
+            validator=validator, judge=judge, config=eval_config,
+        )
+        eval_report = pipeline.evaluate_batch(conversations, seed=42)
+
+        # ----------------------------------------------------------
+        # Step 6: Compute diversity metrics
+        # ----------------------------------------------------------
+        tool_counter: Counter[str] = Counter()
+        domain_set: set[str] = set()
+        tool_combos: set[frozenset[str]] = set()
+
+        for rec in records:
+            meta = rec.metadata or {}
+            tools_used = meta.get("tools_used", [])
+            if isinstance(tools_used, list):
+                for t in tools_used:
+                    tool_counter[t] += 1
+                tool_combos.add(frozenset(tools_used))
+            domains = meta.get("domains", [])
+            if isinstance(domains, list):
+                domain_set.update(domains)
+
+        # Shannon entropy
+        total_tool_uses = sum(tool_counter.values())
+        tool_entropy = 0.0
+        if total_tool_uses > 0:
+            for cnt in tool_counter.values():
+                p = cnt / total_tool_uses
+                if p > 0:
+                    tool_entropy -= p * math.log2(p)
+
+        unique_tools = len(tool_counter)
+        unique_domains = len(domain_set)
+        unique_combos = len(tool_combos)
+
+        # ----------------------------------------------------------
+        # Step 7: Optionally write enriched output
+        # ----------------------------------------------------------
+        if output is not None:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            writer = JSONLWriter(output)
+            for i, rec in enumerate(records):
+                rec_copy = rec.model_copy(deep=True)
+                if i < len(scores):
+                    rec_copy.judge_scores = scores[i].scores_dict
+                writer.write_record(rec_copy)
+            if not quiet:
+                console.print(
+                    f"  [bold green]✓[/bold green] Wrote "
+                    f"[bold]{writer.count}[/bold] enriched records to {output}"
+                )
+
+        # ----------------------------------------------------------
+        # Step 8: Format and display report
+        # ----------------------------------------------------------
+        elapsed = time.perf_counter() - t0
+
+        if fmt == "json":
+            report_data: dict[str, object] = {
+                "total": len(records),
+                "valid": valid_count,
+                "invalid": invalid_count,
+                "passed": eval_report.passed,
+                "failed": eval_report.failed,
+                "pass_rate": round(eval_report.pass_rate, 4),
+                "average_scores": avg_scores.scores_dict if avg_scores else None,
+                "mean_score": round(avg_scores.average, 2) if avg_scores else None,
+                "diversity": {
+                    "tool_entropy": round(tool_entropy, 4),
+                    "unique_tools": unique_tools,
+                    "unique_domains": unique_domains,
+                    "unique_tool_combos": unique_combos,
+                },
+                "score_distribution": eval_report.score_distribution,
+            }
+            json_out = _json.dumps(report_data, indent=2, default=str)
+            if output is None:
+                console.print(json_out)
+            else:
+                # JSON report goes to stdout regardless
+                console.print(json_out)
+
+        elif fmt == "markdown":
+            lines = [
+                "# Evaluation Report",
+                "",
+                "| Metric | Value |",
+                "|--------|-------|",
+                f"| Total | {len(records)} |",
+                f"| Valid | {valid_count} |",
+                f"| Invalid | {invalid_count} |",
+                f"| Passed | {eval_report.passed} |",
+                f"| Failed | {eval_report.failed} |",
+                f"| Pass rate | {eval_report.pass_rate:.1%} |",
+            ]
+            if avg_scores:
+                lines.extend([
+                    f"| Avg tool_correctness | {avg_scores.tool_correctness} |",
+                    f"| Avg argument_grounding | {avg_scores.argument_grounding} |",
+                    f"| Avg task_completion | {avg_scores.task_completion} |",
+                    f"| Avg naturalness | {avg_scores.naturalness} |",
+                    f"| Mean score | {avg_scores.average:.2f} |",
+                ])
+            lines.extend([
+                f"| Tool entropy | {tool_entropy:.4f} |",
+                f"| Unique tools | {unique_tools} |",
+                f"| Unique domains | {unique_domains} |",
+                f"| Unique tool combos | {unique_combos} |",
+            ])
+            md_text = "\n".join(lines)
+            if not quiet:
+                console.print(md_text)
+
+        else:
+            # table (default)
+            if not quiet:
+                console.print()
+                tbl = Table(
+                    title="Evaluation Report", show_header=False, padding=(0, 2),
+                )
+                tbl.add_column("metric", style="bold")
+                tbl.add_column("value")
+                tbl.add_row("Total", str(len(records)))
+                tbl.add_row("Valid", str(valid_count))
+                tbl.add_row("Invalid", str(invalid_count))
+                tbl.add_row("Passed", str(eval_report.passed))
+                tbl.add_row("Failed", str(eval_report.failed))
+                tbl.add_row("Pass rate", f"{eval_report.pass_rate:.1%}")
+
+                if avg_scores:
+                    tbl.add_row("Avg tool_correctness", str(avg_scores.tool_correctness))
+                    tbl.add_row(
+                        "Avg argument_grounding", str(avg_scores.argument_grounding),
+                    )
+                    tbl.add_row("Avg task_completion", str(avg_scores.task_completion))
+                    tbl.add_row("Avg naturalness", str(avg_scores.naturalness))
+                    tbl.add_row("Mean score", f"{avg_scores.average:.2f}")
+
+                tbl.add_row("Tool entropy", f"{tool_entropy:.4f}")
+                tbl.add_row("Unique tools", str(unique_tools))
+                tbl.add_row("Unique domains", str(unique_domains))
+                tbl.add_row("Unique tool combos", str(unique_combos))
+                tbl.add_row("Time", f"{elapsed:.1f}s")
+
+                console.print(tbl)
+
+        logger.info("Evaluate completed in %.1fs", elapsed)
+
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        logger.exception("Evaluate failed: %s", exc)
+        if not quiet:
+            console.print(
+                Panel(
+                    f"[bold red]Evaluate failed[/bold red]\n\n{exc}",
+                    title="Error",
+                    border_style="red",
+                )
+            )
+        raise typer.Exit(code=1) from exc
 
 
 if __name__ == "__main__":
