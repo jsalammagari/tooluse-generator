@@ -192,6 +192,11 @@ def build(
             err_console.print(f"Input directory does not exist: {input_dir}")
             raise typer.Exit(code=1)
 
+        json_count = sum(1 for _ in input_dir.rglob("*.json"))
+        if json_count == 0:
+            err_console.print(f"No JSON files found in {input_dir}")
+            raise typer.Exit(code=1)
+
         _artifact_names = ["registry.json", "graph.pkl", "embeddings.joblib"]
         if output_dir.exists() and not force:
             existing = [n for n in _artifact_names if (output_dir / n).exists()]
@@ -514,6 +519,21 @@ def generate(
             err_console.print(f"Missing graph: {graph_path}")
             raise typer.Exit(code=1)
 
+        embeddings_path = build_dir / "embeddings.joblib"
+        if not embeddings_path.exists():
+            logger.warning("No embeddings.joblib in build_dir — semantic edges may be missing")
+
+        if count > 1000:
+            logger.warning("Generating %d conversations — this may take a while", count)
+
+        if quality_threshold < 1.0:
+            logger.warning(
+                "Quality threshold %.1f is very low — did you mean a value between 1.0 and 5.0?",
+                quality_threshold,
+            )
+
+        logger.info("Running in offline mode (no LLM API key configured)")
+
         # ----------------------------------------------------------
         # Step 2: Load build artifacts
         # ----------------------------------------------------------
@@ -780,6 +800,9 @@ def evaluate(
         # ----------------------------------------------------------
         # Step 1: Validate inputs
         # ----------------------------------------------------------
+        if input_path.is_dir():
+            err_console.print(f"INPUT must be a file, not a directory: {input_path}")
+            raise typer.Exit(code=1)
         if not input_path.is_file():
             err_console.print(f"Input file does not exist: {input_path}")
             raise typer.Exit(code=1)
