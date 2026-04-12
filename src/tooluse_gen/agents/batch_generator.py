@@ -9,6 +9,8 @@ and a :class:`ToolChainSampler`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -77,8 +79,14 @@ class BatchGenerator:
         seed: int = 42,
         steering_enabled: bool = True,
         show_progress: bool = False,
+        interrupt_check: Callable[[], bool] | None = None,
     ) -> list[Conversation]:
-        """Generate *count* conversations, returning those that succeed."""
+        """Generate *count* conversations, returning those that succeed.
+
+        If *interrupt_check* is provided, it is called at the start of
+        each iteration.  When it returns ``True`` the loop stops and
+        the conversations generated so far are returned.
+        """
         if count <= 0:
             self._stats = self._compute_stats([], 0, steering_enabled)
             return []
@@ -101,6 +109,15 @@ class BatchGenerator:
         )
 
         for i in range(count):
+            # Check for interrupt before each attempt.
+            if interrupt_check is not None and interrupt_check():
+                self._logger.info(
+                    "Interrupted after %d/%d conversations",
+                    len(conversations),
+                    count,
+                )
+                break
+
             conv_seed = seed + i
 
             # Sample chain.

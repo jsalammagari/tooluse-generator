@@ -574,6 +574,7 @@ def generate(
             conversations = batch_gen.generate_batch(
                 count=count, constraints=constraints, seed=seed, steering_enabled=steering,
                 show_progress=not quiet,
+                interrupt_check=lambda: interrupt.interrupted,
             )
             batch_stats = batch_gen.get_batch_stats()
 
