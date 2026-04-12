@@ -61,9 +61,21 @@ class JudgeAgent:
     # ------------------------------------------------------------------
 
     def score(self, conversation: Conversation) -> JudgeScores:
-        """Score a single conversation."""
+        """Score a single conversation.
+
+        If the LLM call fails, falls back to offline heuristic scoring
+        so the pipeline can continue without crashing.
+        """
         if self._client is not None:
-            return self._score_with_llm(conversation)
+            try:
+                return self._score_with_llm(conversation)
+            except Exception as exc:
+                self._logger.warning(
+                    "Judge LLM call failed for %s, falling back to offline: %s",
+                    conversation.conversation_id,
+                    exc,
+                )
+                return self._score_offline(conversation)
         return self._score_offline(conversation)
 
     def score_batch(

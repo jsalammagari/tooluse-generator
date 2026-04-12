@@ -14,7 +14,13 @@ from tooluse_gen.core.config import (
     merge_cli_overrides,
 )
 from tooluse_gen.core.jsonl_io import JSONLReader, JSONLWriter
-from tooluse_gen.core.llm_client import LLMClient, LLMClientConfig, LLMClientError
+from tooluse_gen.core.llm_client import (
+    LLMClient,
+    LLMClientConfig,
+    LLMClientError,
+    classify_error,
+    is_retryable,
+)
 from tooluse_gen.core.output_models import (
     ConversationRecord,
     from_conversation,
@@ -60,6 +66,8 @@ __all__ = [
     # LLM Client
     "LLMClient",
     "LLMClientConfig",
+    "classify_error",
+    "is_retryable",
     "LLMClientError",
     # JSONL I/O
     "JSONLReader",

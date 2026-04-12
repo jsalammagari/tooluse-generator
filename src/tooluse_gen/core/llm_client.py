@@ -65,6 +65,36 @@ class LLMClientError(Exception):
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
+# ---------------------------------------------------------------------------
+# Error classification
+# ---------------------------------------------------------------------------
+
+
+def classify_error(error: Exception) -> str:
+    """Classify an API error as ``'retryable'``, ``'fatal'``, or ``'unknown'``.
+
+    * ``'retryable'`` — rate limits, timeouts, transient server errors
+    * ``'fatal'`` — authentication, invalid request, not found
+    * ``'unknown'`` — unrecognised exception types
+    """
+    if isinstance(error, openai.RateLimitError):
+        return "retryable"
+    if isinstance(error, openai.APITimeoutError):
+        return "retryable"
+    if isinstance(error, openai.APIConnectionError):
+        return "retryable"
+    if isinstance(error, openai.APIStatusError):
+        return "retryable" if error.status_code in _RETRYABLE_STATUS else "fatal"
+    if isinstance(error, LLMClientError):
+        return "retryable"
+    return "unknown"
+
+
+def is_retryable(error: Exception) -> bool:
+    """Return ``True`` if the error is transient and worth retrying."""
+    return classify_error(error) == "retryable"
+
+
 class LLMClient:
     """OpenAI API client with error handling and retry logic."""
 
