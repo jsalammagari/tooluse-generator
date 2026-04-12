@@ -124,7 +124,7 @@ Environment variables in `.env` override API keys. The pipeline works fully offl
 
 ## Output Format
 
-Each line in the output JSONL is a conversation record:
+Each line in the output JSONL is a conversation record. See [DESIGN.md — Appendix: Output Schema Reference](DESIGN.md#appendix-output-schema-reference) for the complete field-by-field schema documentation.
 
 ```json
 {

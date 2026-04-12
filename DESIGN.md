@@ -778,3 +778,205 @@ return (conversation, FAILED: "max_retries_exceeded")
 ```
 
 Feedback from failed attempts (validation errors or judge reasoning) is stored in `chain.metadata["repair_feedback"]` and available to the orchestrator during regeneration. With offline generation, most conversations pass on the first attempt — the repair loop primarily catches structural edge cases.
+
+---
+
+## Appendix: Output Schema Reference
+
+This appendix documents every field in the JSONL output produced by `tooluse generate`. Each record is keyed by `conversation_id` and contains `messages`, `judge_scores`, and `metadata`.
+
+### A.1 JSONL File Structure
+
+Each output file is a sequence of JSON lines:
+
+1. **Line 1** — metadata header (optional, `__metadata__: true`)
+2. **Lines 2–N** — one `ConversationRecord` per line
+
+### A.2 JSONL Header
+
+The first line is a run-configuration header written by `JSONLWriter.write_header()`. `JSONLReader` skips it automatically.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `__metadata__` | `bool` | Always `true` — marks this line as a header, not a record |
+| `config` | `dict` | Full `AppConfig` snapshot (models, quality, sampling, diversity, paths) |
+| `seed` | `int` | Global random seed used for this run |
+| `timestamp` | `str` | ISO-8601 UTC timestamp of run start |
+| `cli_args` | `dict` | CLI arguments passed to `generate` (count, seed, steps, steering, etc.) |
+| `version` | `str` | Package version (e.g., `"0.1.0"`) |
+
+### A.3 ConversationRecord (top-level)
+
+Each conversation line is a `ConversationRecord` (`core/output_models.py`):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `conversation_id` | `str` | Yes | Unique UUID for this conversation |
+| `messages` | `list[dict]` | Yes | Ordered list of role-tagged messages (see A.4) |
+| `judge_scores` | `dict[str, int]` or `null` | No | Quality scores on 4 dimensions (see A.6) |
+| `metadata` | `dict` | Yes | Generation metadata (see A.7) |
+
+### A.4 Message Format
+
+Each entry in the `messages` array:
+
+| Field | Type | Present When | Description |
+|-------|------|-------------|-------------|
+| `role` | `"user"` &#124; `"assistant"` &#124; `"tool"` | Always | Who sent the message |
+| `content` | `str` &#124; `dict` &#124; `null` | Always | Text for user/assistant; structured dict for tool responses; `null` for tool-call-only assistant turns |
+| `tool_calls` | `list[dict]` | Assistant tool-call turns | List of tool invocations (see A.5) |
+| `tool_call_id` | `str` | Tool messages | Links this response to the `call_id` of the originating tool call |
+
+**Role patterns in a typical conversation:**
+
+```
+user → assistant (disambiguate) → user (clarify) → assistant (tool_calls)
+→ tool → assistant (tool_calls) → tool → assistant (final answer)
+```
+
+### A.5 Tool Call Format
+
+Each entry in a message's `tool_calls` array:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `endpoint` | `str` | Endpoint identifier (e.g., `"hotels_api/GET/search_hotels"`) |
+| `arguments` | `dict[str, Any]` | Key-value arguments for the call |
+| `tool_name` | `str` | Human-readable tool name (e.g., `"Hotel Booking API"`) |
+| `call_id` | `str` | Unique identifier for this call (used by tool responses' `tool_call_id`) |
+
+### A.6 Judge Scores
+
+The `judge_scores` dict contains four integer dimensions:
+
+| Field | Type | Range | Description |
+|-------|------|-------|-------------|
+| `tool_correctness` | `int` | 1–5 | Were appropriate tools selected for the task? |
+| `argument_grounding` | `int` | 1–5 | Are arguments grounded in real values from prior outputs? |
+| `task_completion` | `int` | 1–5 | Was the user's stated goal achieved? |
+| `naturalness` | `int` | 1–5 | Does the conversation flow like a real interaction? |
+
+> **Note:** The LLM judge also produces a `reasoning` string and a computed `average` float, but these are excluded from the JSONL output by `JudgeScores.scores_dict`.
+
+### A.7 Metadata Fields
+
+The `metadata` dict contains all fields from `ConversationMetadata` (`agents/conversation_models.py`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `seed` | `int` | Random seed used for this conversation |
+| `tools_used` | `list[str]` | Tool IDs used in this conversation (sorted, deduplicated) |
+| `domains` | `list[str]` | Domains involved (e.g., `["Travel", "Weather"]`) |
+| `num_turns` | `int` | Total message count in the conversation |
+| `num_tool_calls` | `int` | Number of tool invocations (assistant messages with `tool_calls`) |
+| `num_distinct_tools` | `int` | Count of unique tool IDs |
+| `pattern` | `str` | Chain pattern: `"sequential"`, `"parallel"`, `"branch_and_merge"`, or `"iterative"` |
+| `generation_time_ms` | `int` | Wall-clock generation time in milliseconds |
+| `attempt_number` | `int` | Repair attempt that produced this conversation (1 = first try) |
+| `config` | `dict` | Snapshot of `OrchestratorConfig` used during generation |
+| `endpoints_called` | `list[str]` | Endpoint IDs called, in order of invocation |
+| `disambiguation_count` | `int` | Number of assistant-asks-user clarification exchanges |
+| `grounding_stats` | `dict` | Grounding resolution statistics (see A.8) |
+
+### A.8 Grounding Stats
+
+The `grounding_stats` sub-dict tracks how tool-call arguments were resolved:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `grounded_args` | `int` | Arguments resolved from prior tool outputs (grounded) |
+| `fresh_args` | `int` | Arguments generated fresh from `ValuePool` |
+| `total_args` | `int` | Total arguments across all tool calls |
+
+A higher `grounded_args / total_args` ratio indicates better within-conversation coherence.
+
+### A.9 Complete Example Record
+
+```json
+{
+  "conversation_id": "683249ea-fd9c-41dc-8e0e-270a2db8ca45",
+  "messages": [
+    {
+      "role": "user",
+      "content": "I'm planning a trip to Paris and need a hotel."
+    },
+    {
+      "role": "assistant",
+      "content": "What's your budget range per night?"
+    },
+    {
+      "role": "user",
+      "content": "Under 200 euros."
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "endpoint": "hotels_api/GET/search_hotels",
+          "arguments": {"city": "Paris", "max_price": 200},
+          "tool_name": "Hotel Booking API",
+          "call_id": "call_1"
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": {
+        "results": [{"id": "htl_881", "name": "Hôtel du Marais", "price": 175}]
+      },
+      "tool_call_id": "call_1"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "endpoint": "hotels_api/POST/book_hotel",
+          "arguments": {"hotel_id": "htl_881", "guest_name": "Alice Martin"},
+          "tool_name": "Hotel Booking API",
+          "call_id": "call_2"
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": {
+        "booking_id": "bk_3391",
+        "status": "confirmed",
+        "hotel_id": "htl_881"
+      },
+      "tool_call_id": "call_2"
+    },
+    {
+      "role": "assistant",
+      "content": "I've booked Hôtel du Marais for you in Paris at 175 EUR/night. Confirmation: bk_3391."
+    }
+  ],
+  "judge_scores": {
+    "tool_correctness": 5,
+    "argument_grounding": 4,
+    "task_completion": 5,
+    "naturalness": 4
+  },
+  "metadata": {
+    "seed": 42,
+    "tools_used": ["hotels_api"],
+    "domains": ["Travel"],
+    "num_turns": 8,
+    "num_tool_calls": 2,
+    "num_distinct_tools": 1,
+    "pattern": "sequential",
+    "generation_time_ms": 45,
+    "attempt_number": 1,
+    "config": {},
+    "endpoints_called": ["hotels_api/GET/search_hotels", "hotels_api/POST/book_hotel"],
+    "disambiguation_count": 1,
+    "grounding_stats": {
+      "grounded_args": 1,
+      "fresh_args": 3,
+      "total_args": 4
+    }
+  }
+}
+```
