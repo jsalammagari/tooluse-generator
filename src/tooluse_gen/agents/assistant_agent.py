@@ -144,20 +144,37 @@ class AssistantAgent:
 
         # (a) Final answer when chain is done or absent.
         if chain is None:
-            return self._generate_final_answer(context)
+            resp = self._generate_final_answer(context)
+            self._logger.debug("Assistant: final answer (no chain)")
+            return resp
 
         flat = _flatten_steps(chain)
+        self._logger.debug(
+            "Assistant generating response (step %d/%d)", context.current_step, len(flat),
+        )
+
         if context.current_step >= len(flat):
-            return self._generate_final_answer(context)
+            resp = self._generate_final_answer(context)
+            self._logger.debug("Assistant: final answer (chain complete)")
+            return resp
 
         # (b) Disambiguation.
         if config.include_disambiguation and self._should_disambiguate(
             context, rng, config
         ):
-            return self._generate_disambiguation(context, rng)
+            resp = self._generate_disambiguation(context, rng)
+            self._logger.debug("Assistant: disambiguation question")
+            return resp
 
         # (c) Tool call for the next chain step.
-        return self._generate_tool_call(context, rng)
+        resp = self._generate_tool_call(context, rng)
+        if resp.tool_calls:
+            self._logger.debug(
+                "Assistant: %d tool call(s): %s",
+                len(resp.tool_calls),
+                [tc.endpoint_id for tc in resp.tool_calls],
+            )
+        return resp
 
     # ------------------------------------------------------------------
     # Tool call generation

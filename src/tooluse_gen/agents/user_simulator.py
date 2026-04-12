@@ -127,9 +127,13 @@ class UserSimulator:
         rng: np.random.Generator,
     ) -> str:
         """Generate a natural user request for the sampled *chain*."""
+        self._logger.debug("Generating initial request for chain: %d steps", chain.total_step_count)
         if self._client is not None:
-            return self._call_llm(self._build_initial_prompt(chain))
-        return self._generate_initial_offline(chain, rng)
+            result = self._call_llm(self._build_initial_prompt(chain))
+        else:
+            result = self._generate_initial_offline(chain, rng)
+        self._logger.debug("User initial msg: %s", result[:80])
+        return result
 
     def generate_follow_up(
         self,
@@ -137,6 +141,7 @@ class UserSimulator:
         rng: np.random.Generator,
     ) -> str:
         """Generate a follow-up message based on conversation history."""
+        self._logger.debug("Generating follow-up (step %d)", context.current_step)
         if self._client is not None:
             return self._call_llm(self._build_follow_up_prompt(context))
         return self._generate_follow_up_offline(context, rng)
@@ -148,6 +153,7 @@ class UserSimulator:
         rng: np.random.Generator,
     ) -> str:
         """Respond to an assistant's clarification *question*."""
+        self._logger.debug("Clarifying: %s", question[:80])
         if self._client is not None:
             return self._call_llm(self._build_clarification_prompt(context, question))
         return self._generate_clarification_offline(context, question, rng)

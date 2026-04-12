@@ -224,3 +224,23 @@ def log_duration(
     else:
         elapsed = time.perf_counter() - start
         _logger.info("%s completed in %.2fs", operation, elapsed)
+
+
+def trace_conversation(
+    conversation: Any, logger: logging.Logger | None = None
+) -> None:
+    """Log a structured summary of a conversation at DEBUG level.
+
+    Useful for debugging conversation quality.  No-op when DEBUG is
+    not enabled on the target logger.
+    """
+    _logger = logger or logging.getLogger(_ROOT)
+    if not _logger.isEnabledFor(logging.DEBUG):
+        return
+    msgs = getattr(conversation, "messages", [])
+    _logger.debug(
+        "Conversation %s: %d messages, roles=%s",
+        str(getattr(conversation, "conversation_id", "?"))[:12],
+        len(msgs),
+        [getattr(m, "role", "?") for m in msgs],
+    )

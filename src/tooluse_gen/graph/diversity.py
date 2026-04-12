@@ -116,6 +116,11 @@ class DiversityTracker:
     def update(self, chain: ToolChain) -> None:
         """Record a newly generated chain."""
         self.total_conversations += 1
+        logger.debug(
+            "Diversity update: conv %d, tools=%s",
+            self.total_conversations,
+            list(chain.tool_ids),
+        )
 
         for tid in chain.tool_ids:
             self.tool_counts[tid] += 1

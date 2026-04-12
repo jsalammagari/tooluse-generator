@@ -115,6 +115,10 @@ class ConversationOrchestrator:
         attempt_number: int = 1,
     ) -> Conversation:
         """Generate a complete conversation driven by *chain*."""
+        self._logger.debug(
+            "Starting conversation: chain=%d steps, seed=%d",
+            chain.total_step_count, seed,
+        )
         rng = np.random.default_rng(seed)
         context = ConversationContext(chain=chain)
         conv = Conversation(chain=chain)
@@ -152,6 +156,10 @@ class ConversationOrchestrator:
             grounding_stats=loop_stats["grounding_stats"],
         )
         conv.metadata.timed_out = timed_out
+        self._logger.debug(
+            "Conversation complete: %d messages, %d tool calls",
+            len(conv.messages), conv.metadata.num_tool_calls,
+        )
         return conv
 
     # ------------------------------------------------------------------
@@ -184,6 +192,7 @@ class ConversationOrchestrator:
         conv.add_user_message(msg)
         context.add_message("user", msg)
         sm.transition(ConversationEvent.USER_MESSAGE)
+        self._logger.debug("User initial: %s", msg[:80])
 
         flat = _flatten_steps(chain)
 
@@ -226,6 +235,7 @@ class ConversationOrchestrator:
             if resp.is_disambiguation:
                 sm.transition(ConversationEvent.ASSISTANT_DISAMBIGUATE)
                 disambiguation_count += 1
+                self._logger.debug("Disambiguation: %s", (resp.content or "")[:80])
                 conv.add_assistant_message(content=resp.content)
                 context.add_message("assistant", resp.content or "")
                 clarif = self._user_sim.generate_clarification_response(
@@ -246,6 +256,7 @@ class ConversationOrchestrator:
                 ])
 
                 for call in resp.tool_calls:
+                    self._logger.debug("Tool call: %s args=%s", call.endpoint_id, call.arguments)
                     endpoints_called.append(call.endpoint_id)
                     # Count grounding before execution mutates context.
                     available = context.get_available_values()
@@ -257,6 +268,10 @@ class ConversationOrchestrator:
                     total_args += len(call.arguments)
 
                     result = self._executor.execute(call, context, rng)
+                    self._logger.debug(
+                        "Tool result: %s keys=%s",
+                        call.endpoint_id, list(result.data.keys())[:5],
+                    )
                     conv.add_tool_message(
                         tool_call_id=call.call_id, output=result.data
                     )
@@ -285,6 +300,7 @@ class ConversationOrchestrator:
             # Final answer.
             if resp.is_final_answer:
                 sm.transition(ConversationEvent.ASSISTANT_FINAL)
+                self._logger.debug("Final answer: %s", (resp.content or "")[:80])
                 conv.add_assistant_message(content=resp.content)
                 context.add_message("assistant", resp.content or "")
                 break

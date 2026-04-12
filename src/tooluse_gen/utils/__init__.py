@@ -5,6 +5,7 @@ from tooluse_gen.utils.logging import (
     log_context,
     log_duration,
     setup_logging,
+    trace_conversation,
 )
 from tooluse_gen.utils.progress import create_progress_bar, progress_callback
 from tooluse_gen.utils.seeding import (
@@ -24,6 +25,7 @@ __all__ = [
     "get_logger",
     "log_context",
     "log_duration",
+    "trace_conversation",
     # Progress
     "create_progress_bar",
     "progress_callback",
