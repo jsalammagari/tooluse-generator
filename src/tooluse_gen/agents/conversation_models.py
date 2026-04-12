@@ -161,6 +161,7 @@ class ConversationMetadata(BaseModel):
     disambiguation_count: int = Field(
         default=0, description="Number of disambiguation exchanges."
     )
+    timed_out: bool = Field(default=False, description="Whether this conversation hit the timeout.")
     grounding_stats: dict[str, int] = Field(
         default_factory=dict,
         description="Grounding statistics: grounded_args, fresh_args, total_args.",

@@ -76,6 +76,10 @@ class OrchestratorConfig(BaseModel):
     )
     min_tool_calls: int = Field(default=2, ge=0, description="Minimum tool calls.")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="LLM temperature.")
+    timeout_seconds: float = Field(
+        default=30.0, ge=0.0,
+        description="Per-conversation wall-clock timeout in seconds. 0 = no limit.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -118,15 +122,20 @@ class ConversationOrchestrator:
         self._tracker = GroundingTracker()
 
         t0 = time.monotonic()
-        loop_stats = self._run_loop(conv, context, chain, rng, gen_config)
+        loop_stats = self._run_loop(
+            conv, context, chain, rng, gen_config,
+            t0=t0, timeout=self._config.timeout_seconds,
+        )
 
-        # Force final answer if required and missing.
+        timed_out = loop_stats.get("timed_out", False)
+
+        # Force final answer if required and missing (skip if no messages).
         needs_final = (
             not conv.messages
             or conv.messages[-1].role != "assistant"
             or conv.messages[-1].tool_calls
         )
-        if self._config.require_final_answer and needs_final:
+        if self._config.require_final_answer and needs_final and conv.messages:
             self._force_final_answer(conv, context, chain, rng, gen_config)
 
         generation_time_ms = int((time.monotonic() - t0) * 1000)
@@ -142,6 +151,7 @@ class ConversationOrchestrator:
             disambiguation_count=loop_stats["disambiguation_count"],
             grounding_stats=loop_stats["grounding_stats"],
         )
+        conv.metadata.timed_out = timed_out
         return conv
 
     # ------------------------------------------------------------------
@@ -155,6 +165,8 @@ class ConversationOrchestrator:
         chain: ToolChain,
         rng: np.random.Generator,
         gen_config: GenerationConfig,
+        t0: float = 0.0,
+        timeout: float = 0.0,
     ) -> dict[str, Any]:
         sm = ConversationStateMachine()
         sm.transition(ConversationEvent.START)
@@ -165,6 +177,7 @@ class ConversationOrchestrator:
         grounded_args = 0
         fresh_args = 0
         total_args = 0
+        timed_out = False
 
         # Step 1: initial user request.
         msg = self._user_sim.generate_initial_request(chain, context, rng)
@@ -182,6 +195,17 @@ class ConversationOrchestrator:
             if iterations > safety:
                 self._logger.warning("Safety limit reached, breaking loop.")
                 sm.transition(ConversationEvent.ERROR)
+                break
+
+            # Timeout check.
+            if timeout > 0 and (time.monotonic() - t0) >= timeout:
+                self._logger.warning(
+                    "Conversation timed out after %.1fs (limit: %.1fs)",
+                    time.monotonic() - t0,
+                    timeout,
+                )
+                timed_out = True
+                sm.transition(ConversationEvent.MAX_TURNS_REACHED)
                 break
 
             # Check completion before assistant turn.
@@ -278,6 +302,7 @@ class ConversationOrchestrator:
                 "fresh_args": fresh_args,
                 "total_args": total_args,
             },
+            "timed_out": timed_out,
         }
 
     # ------------------------------------------------------------------
