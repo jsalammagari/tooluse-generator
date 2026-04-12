@@ -76,11 +76,14 @@ class BatchGenerator:
         constraints: SamplingConstraints,
         seed: int = 42,
         steering_enabled: bool = True,
+        show_progress: bool = False,
     ) -> list[Conversation]:
         """Generate *count* conversations, returning those that succeed."""
         if count <= 0:
             self._stats = self._compute_stats([], 0, steering_enabled)
             return []
+
+        from tooluse_gen.utils.progress import create_progress_bar
 
         rng = np.random.default_rng(seed)
 
@@ -89,6 +92,13 @@ class BatchGenerator:
 
         conversations: list[Conversation] = []
         failed = 0
+
+        pbar = create_progress_bar(
+            total=count,
+            description="Generating",
+            disable=not show_progress,
+            unit="conv",
+        )
 
         for i in range(count):
             conv_seed = seed + i
@@ -101,6 +111,7 @@ class BatchGenerator:
                     "Sampling failed for conv %d/%d: %s", i + 1, count, exc
                 )
                 failed += 1
+                pbar.update(1)
                 continue
 
             # Generate conversation.
@@ -113,13 +124,16 @@ class BatchGenerator:
                     "Generation failed for conv %d/%d: %s", i + 1, count, exc
                 )
                 failed += 1
+                pbar.update(1)
                 continue
 
             conversations.append(conv)
+            pbar.update(1)
 
             if (len(conversations)) % 10 == 0 or i == count - 1:
                 self._log_progress(len(conversations), count, failed)
 
+        pbar.close()
         self._stats = self._compute_stats(conversations, failed, steering_enabled)
         return conversations
 
