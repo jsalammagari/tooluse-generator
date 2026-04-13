@@ -204,6 +204,11 @@ python -m tooluse_gen.cli.main evaluate output/run_a.jsonl
 python -m tooluse_gen.cli.main evaluate output/run_b.jsonl
 ```
 
+### Generated Datasets
+
+- [output/run_a.jsonl](output/run_a.jsonl) — Run A: 100 conversations, steering **disabled**
+- [output/run_b.jsonl](output/run_b.jsonl) — Run B: 100 conversations, steering **enabled**
+
 ### Results (100 conversations per run, seed=42, 500 tools, 49 domains)
 
 | Metric | Run A (no steering) | Run B (steering) | Delta |
