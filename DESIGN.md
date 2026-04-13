@@ -506,8 +506,8 @@ This can be injected into the `UserSimulator`'s prompt to guide the request towa
 
 | Aspect | Detail |
 |--------|--------|
-| **Benefit** | Entropy increased +0.11, +12 unique tools, +6 unique combos in 100-conversation experiment |
-| **Cost** | Zero quality cost (mean score identical at 4.25); slight domain coverage reduction (42 → 38) |
+| **Benefit** | Zero pattern repetition, +6 unique tool combos, +3 domains (84% coverage vs 78%) in 100-conversation experiment |
+| **Cost** | Zero quality cost (mean score identical at 4.25); tool-level entropy near-identical at this scale |
 | **Limitation** | Fuzzy matching may miss non-obvious parameter connections (e.g., `property_id` from one API matching `listing_id` in another) |
 | **Limitation** | Steering effect depends on graph density — sparse graphs with few cross-domain edges show minimal diversity improvement |
 | **Limitation** | Weight decay is global — a tool popular in one domain gets penalised even for conversations in a different domain |
@@ -739,12 +739,14 @@ Both runs use identical build artifacts and the same seed. The only difference i
 
 | Metric | Run A (no steering) | Run B (steering) | Delta |
 |--------|-------------------|-----------------|-------|
-| Conversations generated | 99 | 100 | +1 |
+| Conversations generated | 100 | 100 | 0 |
 | Pass rate | 100.0% | 100.0% | 0 |
-| **Tool entropy** | 7.3126 | **7.4189** | **+0.1063** |
-| **Unique tools** | 182 | **194** | **+12** |
+| Tool entropy | 7.4371 | 7.4323 | −0.005 |
+| Unique tools | **197** | 196 | −1 |
 | **Unique tool combos** | 94 | **100** | **+6** |
-| Unique domains | **42** | 38 | −4 |
+| **Pattern repetition rate** | 6% | **0%** | **−6%** |
+| **Unique domains** | 38 | **41** | **+3** |
+| **Domain coverage** | 78% | **84%** | **+6%** |
 | Mean score | 4.25 | 4.25 | 0.00 |
 | tool_correctness | 5 | 5 | 0 |
 | argument_grounding | 3 | 3 | 0 |
@@ -755,15 +757,15 @@ Bold values indicate the better result for each diversity metric.
 
 ### 9.4 Diversity vs Quality Tradeoff Analysis
 
-**Finding 1: Steering improves tool-level diversity.**  With 100 conversations across 500 tools, steering increased tool entropy by +0.11 (7.31 → 7.42), discovered 12 more unique tools (182 → 194), and produced 6 more unique tool combinations (94 → 100). Every conversation in Run B used a distinct tool combination, whereas Run A had 5 repeated patterns.
+**Finding 1: Steering eliminates pattern repetition.**  With 100 conversations across 500 tools, steering achieved 0% pattern repetition (every conversation used a unique tool combination), compared to 6% repetition in Run A. It also produced 6 more unique tool combinations (94 → 100).
 
-**Finding 2: Quality tradeoff is absent.**  Both runs produced identical quality scores (mean 4.25). All four dimensions — tool_correctness (5), argument_grounding (3), task_completion (5), naturalness (4) — were unchanged. This is partly because the offline heuristic judge is deterministic given the same conversation structure, and partly because steering affects *which* tools are selected, not *how well* they are used.
+**Finding 2: Steering improves domain coverage.**  Run B covered 41 domains (84% coverage) vs Run A's 38 domains (78% coverage), a +6% improvement. The diversity tracker's inverse-frequency weighting successfully pushes generation toward underrepresented domains.
 
-**Finding 3: Domain coverage shows an interesting inverse.**  Run A (no steering) covered 42 domains vs Run B's 38. This counterintuitive result occurs because the diversity tracker's inverse-frequency weighting operates at the tool level, not the domain level. By pushing away from recently-used tools, steering sometimes concentrates on tools within the same domain that happen to be underrepresented individually. A domain-level weight adjustment (e.g., `get_domain_weight()`) exists but has less influence than tool-level weights.
+**Finding 3: Tool-level entropy is near-identical.**  Both runs produced nearly identical tool entropy (7.4371 vs 7.4323) and unique tool counts (197 vs 196). With 500 tools available and only 100 conversations, even unsteered generation explores the tool space broadly — the MCTS sampler's inherent exploration is sufficient at this scale. Steering's benefit is more visible in combinatorial diversity (unique combos) and domain coverage than in raw tool-level entropy.
 
-**Finding 4: Steering prevents sampling failures.**  Run A generated only 99 conversations (1 sampling failure), while Run B generated all 100. The diversity tracker's weight adjustments help the MCTS sampler avoid dead-end paths by steering toward nodes with more unexplored connections.
+**Finding 4: Quality tradeoff is absent.**  Both runs produced identical quality scores (mean 4.25). All four dimensions — tool_correctness (5), argument_grounding (3), task_completion (5), naturalness (4) — were unchanged. Steering affects *which* tools are selected, not *how well* they are used.
 
-**Conclusion**: Cross-conversation diversity steering is a net positive. It improves tool entropy (+1.5%), unique tools (+6.6%), and unique combinations (+6.4%) with zero quality cost. The only tradeoff is a slight reduction in domain breadth (−9.5%), which could be addressed by adding explicit domain-level coverage targets to the steering mechanism.
+**Conclusion**: Cross-conversation diversity steering is a net positive. Its primary benefit is combinatorial: zero pattern repetition (+6 unique combos) and broader domain coverage (+3 domains, +6%). The quality cost is zero. At this scale (100 conversations, 500 tools), tool-level entropy is already saturated, so steering's impact appears in higher-order diversity metrics rather than raw tool counts.
 
 ### 9.5 Evaluation Strategy
 

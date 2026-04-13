@@ -208,15 +208,17 @@ python -m tooluse_gen.cli.main evaluate output/run_b.jsonl
 
 | Metric | Run A (no steering) | Run B (steering) | Delta |
 |--------|-------------------|-----------------|-------|
-| Conversations | 99 | 100 | +1 |
+| Conversations | 100 | 100 | 0 |
 | Pass rate | 100% | 100% | 0 |
 | Mean score | 4.25 | 4.25 | 0.00 |
-| Tool entropy | 7.31 | **7.42** | **+0.11** |
-| Unique tools | 182 | **194** | **+12** |
+| Tool entropy | 7.4371 | 7.4323 | -0.005 |
+| Unique tools | **197** | 196 | -1 |
 | Unique tool combos | 94 | **100** | **+6** |
-| Unique domains | **42** | 38 | -4 |
+| Pattern repetition | 6% | **0%** | **-6%** |
+| Unique domains | 38 | **41** | **+3** |
+| Domain coverage | 78% | **84%** | **+6%** |
 
-**Key finding**: Steering improves tool diversity (higher entropy, more unique tools and combinations) with zero quality cost. See [DESIGN.md Section 9](DESIGN.md#9-diversity--quality-analysis) for full analysis.
+**Key finding**: Steering eliminates pattern repetition (every conversation uses a unique tool combination) and improves domain coverage (+6%), with zero quality cost. See [DESIGN.md Section 9](DESIGN.md#9-diversity--quality-analysis) for full analysis.
 
 ### Reproducibility
 
