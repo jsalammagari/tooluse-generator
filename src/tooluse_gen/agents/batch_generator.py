@@ -120,9 +120,23 @@ class BatchGenerator:
 
             conv_seed = seed + i
 
+            # Vary chain length for conversation diversity:
+            # ~30% short (2 steps), ~40% medium (3 steps), ~30% long (4-5 steps)
+            roll = float(rng.random())
+            if roll < 0.3:
+                conv_constraints = constraints.model_copy(
+                    update={"min_steps": 2, "max_steps": 2, "min_tools": 1}
+                )
+            elif roll < 0.7:
+                conv_constraints = constraints.model_copy(
+                    update={"min_steps": 3, "max_steps": 3}
+                )
+            else:
+                conv_constraints = constraints
+
             # Sample chain.
             try:
-                chain = self._sampler.sample_chain(constraints, rng)
+                chain = self._sampler.sample_chain(conv_constraints, rng)
             except (SamplingError, Exception) as exc:  # noqa: BLE001
                 self._logger.warning(
                     "Sampling failed for conv %d/%d: %s", i + 1, count, exc

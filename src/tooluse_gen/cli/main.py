@@ -152,6 +152,20 @@ def build(
         bool,
         typer.Option("--generate-pools", help="Generate value pools for mock responses."),
     ] = False,
+    max_tools: Annotated[
+        int | None,
+        typer.Option(
+            "--max-tools",
+            help="Limit the number of tools to load (sample across domains). Use for faster builds on subsets.",
+        ),
+    ] = None,
+    no_semantic_edges: Annotated[
+        bool,
+        typer.Option(
+            "--no-semantic-edges",
+            help="Skip semantic similarity edges (and embedding computation) for faster builds.",
+        ),
+    ] = False,
 ) -> None:
     """Ingest ToolBench data, build tool registry and graph."""
     quiet = bool(_state["quiet"])
@@ -166,12 +180,16 @@ def build(
                 f"  similarity-threshold: {similarity_threshold}\n"
                 f"  force              : {force}\n"
                 f"  generate-pools     : {generate_pools}\n"
+                f"  max-tools          : {max_tools or 'all'}\n"
+                f"  no-semantic-edges  : {no_semantic_edges}\n"
                 f"  config             : {_state['config']}",
                 title="tooluse build",
             )
         )
 
     # Late imports to keep CLI startup fast
+    from collections import defaultdict
+
     from tooluse_gen.agents.value_generator import ValuePool
     from tooluse_gen.graph.builder import GraphBuilder
     from tooluse_gen.graph.embeddings import EmbeddingService
@@ -179,7 +197,7 @@ def build(
     from tooluse_gen.graph.persistence import save_embeddings, save_graph
     from tooluse_gen.graph.queries import get_graph_stats
     from tooluse_gen.registry.completeness import QualityTier, generate_quality_report
-    from tooluse_gen.registry.registry import RegistryBuilder
+    from tooluse_gen.registry.registry import RegistryBuilder, ToolRegistry
     from tooluse_gen.registry.serialization import save_registry
 
     t0 = time.perf_counter()
@@ -212,13 +230,44 @@ def build(
         # ----------------------------------------------------------
         # Step 2: Load ToolBench data
         # ----------------------------------------------------------
-        registry = (
+        full_registry = (
             RegistryBuilder()
             .load_from_directory(input_dir)
             .calculate_completeness()
             .filter_by_quality(QualityTier.FAIR)
             .build()
         )
+
+        # Optionally subsample tools (spread across domains for coverage)
+        if max_tools is not None and len(full_registry) > max_tools:
+            import random as _rng
+
+            all_tools = list(full_registry.tools())
+            # Stratified sample: pick evenly across domains, then fill remainder
+            domain_buckets: dict[str, list] = defaultdict(list)
+            for t in all_tools:
+                domain_buckets[t.domain or "_none"].append(t)
+            per_domain = max(1, max_tools // max(len(domain_buckets), 1))
+            sampled: list = []
+            for _d, tools_in_d in sorted(domain_buckets.items()):
+                _rng.shuffle(tools_in_d)
+                sampled.extend(tools_in_d[:per_domain])
+            # If we still need more, fill from remainder
+            sampled_ids = {t.tool_id for t in sampled}
+            remaining = [t for t in all_tools if t.tool_id not in sampled_ids]
+            _rng.shuffle(remaining)
+            sampled.extend(remaining[: max_tools - len(sampled)])
+            sampled = sampled[:max_tools]
+
+            registry = ToolRegistry()
+            registry.add_tools(sampled)
+            if not quiet:
+                console.print(
+                    f"  [bold yellow]⚡[/bold yellow] Subsampled to [bold]{len(registry)}[/bold] tools "
+                    f"(from {len(full_registry)}) across {len(set(t.domain for t in sampled))} domains"
+                )
+        else:
+            registry = full_registry
 
         total_endpoints = sum(len(t.endpoints) for t in registry.tools())
         if not quiet:
@@ -244,20 +293,32 @@ def build(
         # ----------------------------------------------------------
         # Step 4: Build embeddings
         # ----------------------------------------------------------
-        include_semantic = True
-        try:
-            embedding_service = EmbeddingService(model_name=embedding_model)
-        except Exception:
-            logger.warning(
-                "Failed to initialise EmbeddingService (%s) — "
-                "semantic edges will be skipped.",
-                embedding_model,
-                exc_info=True,
+        include_semantic = not no_semantic_edges and similarity_threshold < 1.0
+        if not include_semantic and not quiet:
+            console.print(
+                "  [bold yellow]⚡[/bold yellow] Skipping semantic edges "
+                f"({'--no-semantic-edges' if no_semantic_edges else f'threshold={similarity_threshold}'})"
             )
+
+        if include_semantic:
+            try:
+                embedding_service = EmbeddingService(model_name=embedding_model)
+            except Exception:
+                logger.warning(
+                    "Failed to initialise EmbeddingService (%s) — "
+                    "semantic edges will be skipped.",
+                    embedding_model,
+                    exc_info=True,
+                )
+                embedding_service = EmbeddingService.__new__(EmbeddingService)
+                embedding_service._model = None  # type: ignore[attr-defined]
+                embedding_service._cache_dir = None  # type: ignore[attr-defined]
+                include_semantic = False
+        else:
+            # Create a stub so GraphBuilder can be instantiated
             embedding_service = EmbeddingService.__new__(EmbeddingService)
             embedding_service._model = None  # type: ignore[attr-defined]
             embedding_service._cache_dir = None  # type: ignore[attr-defined]
-            include_semantic = False
 
         # ----------------------------------------------------------
         # Step 5: Build tool graph
@@ -532,8 +593,6 @@ def generate(
                 quality_threshold,
             )
 
-        logger.info("Running in offline mode (no LLM API key configured)")
-
         # ----------------------------------------------------------
         # Step 2: Load build artifacts
         # ----------------------------------------------------------
@@ -559,8 +618,13 @@ def generate(
         app_config = _load_app_config()
 
         # ----------------------------------------------------------
-        # Step 4: Initialize agents (offline mode, no LLM)
+        # Step 4: Initialize agents (offline mode — fast, no API costs)
         # ----------------------------------------------------------
+        if not quiet:
+            console.print(
+                "  [bold green]✓[/bold green] Running in [bold]offline/template mode[/bold]"
+            )
+
         user_sim = UserSimulator()
         assistant = AssistantAgent(registry=registry)
         executor = ToolExecutor(registry=registry)
@@ -569,7 +633,7 @@ def generate(
         )
 
         # ----------------------------------------------------------
-        # Step 5: Initialize sampler with diversity config
+        # Step 6: Initialize sampler with diversity config
         # ----------------------------------------------------------
         diversity_config = DiversitySteeringConfig(enabled=steering)
         sampler = ToolChainSampler(graph, diversity_config=diversity_config)
@@ -615,7 +679,7 @@ def generate(
         # Step 7: Evaluate conversations
         # ----------------------------------------------------------
         validator = ConversationValidator(registry=registry)
-        judge = JudgeAgent()  # offline heuristic mode
+        judge = JudgeAgent()
         eval_config = EvaluationConfig(
             min_score=quality_threshold, max_retries=max_retries,
         )
@@ -827,6 +891,8 @@ def evaluate(
         # Step 3: Convert records to Conversations
         # ----------------------------------------------------------
         def _record_to_conversation(rec: ConversationRecord) -> Conversation:
+            from tooluse_gen.agents.execution_models import ToolCallRequest
+
             msgs: list[Message] = []
             for md in rec.messages:
                 raw_content = md.get("content")
@@ -835,7 +901,27 @@ def evaluate(
                     content: str | None = _json.dumps(raw_content, default=str)
                 else:
                     content = raw_content
-                msgs.append(Message(role=md["role"], content=content))
+
+                # Reconstruct tool_calls from JSONL dicts
+                tool_calls = None
+                raw_tc = md.get("tool_calls")
+                if raw_tc and isinstance(raw_tc, list):
+                    tool_calls = []
+                    for tc in raw_tc:
+                        tool_calls.append(ToolCallRequest(
+                            call_id=tc.get("call_id", ""),
+                            endpoint_id=tc.get("endpoint", ""),
+                            tool_id=tc.get("tool_id", tc.get("tool_name", "")),
+                            tool_name=tc.get("tool_name", ""),
+                            endpoint_name=tc.get("endpoint_name", ""),
+                            arguments=tc.get("arguments", {}),
+                        ))
+
+                msgs.append(Message(
+                    role=md["role"],
+                    content=content,
+                    tool_calls=tool_calls if tool_calls else None,
+                ))
             return Conversation(
                 conversation_id=rec.conversation_id,
                 messages=msgs,

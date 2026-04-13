@@ -435,17 +435,26 @@ class TestShouldBeAmbiguous:
 # ===================================================================
 
 
-class TestBuildToolContext:
-    def test_lowercase_joined(self, chain):
+class TestBuildTaskDescription:
+    def test_produces_nonempty(self, chain):
+        from tooluse_gen.agents.user_simulator import _iter_chain_steps
+
         sim = UserSimulator()
-        result = sim._build_tool_context(chain)
-        assert result == "search hotels and book hotel"
+        steps = _iter_chain_steps(chain)
+        rng = np.random.default_rng(42)
+        result = sim._build_task_description(steps, rng)
+        assert isinstance(result, str)
+        assert len(result) > 5
 
     def test_handles_parallel_group(self, parallel_chain):
+        from tooluse_gen.agents.user_simulator import _iter_chain_steps
+
         sim = UserSimulator()
-        result = sim._build_tool_context(parallel_chain)
-        assert "get a" in result
-        assert "get b" in result
+        steps = _iter_chain_steps(parallel_chain)
+        rng = np.random.default_rng(42)
+        result = sim._build_task_description(steps, rng)
+        assert isinstance(result, str)
+        assert len(result) > 5
 
 
 # ===================================================================

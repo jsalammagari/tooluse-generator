@@ -9,6 +9,7 @@ responses.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +134,118 @@ _FUZZY_MAP: dict[str, str] = {
     "name": "person_name",
 }
 
+# Domain-specific name pools so a music tool returns song names, not "TurboCharge 3000"
+_DOMAIN_NAMES: dict[str, list[str]] = {
+    "Music": [
+        "Bohemian Rhapsody", "Stairway to Heaven", "Hotel California",
+        "Imagine", "Yesterday", "Smells Like Teen Spirit", "Billie Jean",
+        "Like a Rolling Stone", "Purple Rain", "Hey Jude",
+    ],
+    "Entertainment": [
+        "The Shawshank Redemption", "Inception", "The Dark Knight",
+        "Pulp Fiction", "Forrest Gump", "The Matrix", "Interstellar",
+        "The Godfather", "Fight Club", "Parasite",
+    ],
+    "Food": [
+        "Margherita Pizza", "Pad Thai", "Sushi Platter", "Caesar Salad",
+        "Beef Bourguignon", "Fish and Chips", "Chicken Tikka Masala",
+        "Tacos al Pastor", "Ramen Bowl", "Croissant",
+    ],
+    "Sports": [
+        "Manchester United vs Liverpool", "Super Bowl LVIII", "NBA Finals Game 5",
+        "Wimbledon Final", "World Cup Semi-Final", "Champions League Draw",
+        "Olympics 100m Sprint", "Tour de France Stage 12",
+    ],
+    "Travel": [
+        "Paris City Tour", "Tokyo Express Pass", "Caribbean Cruise",
+        "Alpine Hiking Trail", "Safari Adventure", "Beach Resort Package",
+        "Historical Walking Tour", "Northern Lights Experience",
+    ],
+    "Finance": [
+        "AAPL (Apple Inc.)", "GOOGL (Alphabet)", "TSLA (Tesla Inc.)",
+        "S&P 500 Index Fund", "Bitcoin (BTC)", "US Treasury Bond 10Y",
+        "MSFT (Microsoft Corp)", "AMZN (Amazon.com)",
+    ],
+    "Education": [
+        "Introduction to Python", "Advanced Mathematics", "World History 101",
+        "Machine Learning Fundamentals", "Creative Writing Workshop",
+        "Data Science Bootcamp", "Biology Lab Manual",
+    ],
+    "Location": [
+        "Times Square, New York", "Eiffel Tower, Paris", "Shibuya Crossing, Tokyo",
+        "Big Ben, London", "Colosseum, Rome", "Opera House, Sydney",
+        "Golden Gate Bridge, San Francisco",
+    ],
+    "Commerce": [
+        "Premium Wireless Headphones", "Organic Cotton T-Shirt",
+        "Stainless Steel Water Bottle", "Leather Messenger Bag",
+        "Smart Home Hub", "Running Shoes Pro", "Ceramic Coffee Mug Set",
+    ],
+    "Business": [
+        "Q4 Revenue Report", "Marketing Strategy Deck", "Board Meeting Minutes",
+        "Annual Budget Proposal", "Client Engagement Summary",
+        "Product Roadmap 2024", "Team Performance Review",
+    ],
+    "Cryptography": [
+        "SHA-256 Hash Result", "RSA-2048 Key Pair", "AES Encrypted Payload",
+        "Digital Signature (ECDSA)", "Base64 Decoded Message",
+        "HMAC Authentication Token", "PGP Encrypted Document",
+    ],
+    "Cybersecurity": [
+        "Vulnerability Scan Report", "Threat Assessment Summary",
+        "Firewall Rule Update", "Intrusion Detection Alert",
+        "SSL Certificate Status", "Access Audit Log",
+    ],
+    "Database": [
+        "Users Table Query", "Customer Records Export", "Transaction Log Entry",
+        "Schema Migration Result", "Index Optimization Report",
+    ],
+    "Email": [
+        "Newsletter Campaign", "Welcome Email Template", "Password Reset Email",
+        "Order Confirmation", "Meeting Invitation",
+    ],
+    "Gaming": [
+        "World of Warcraft", "Minecraft", "League of Legends",
+        "Fortnite Battle Royale", "The Legend of Zelda", "Elden Ring",
+    ],
+    "Health_and_Fitness": [
+        "Daily Step Count", "Heart Rate Summary", "Workout Plan",
+        "Nutrition Analysis", "Sleep Quality Report", "BMI Calculator Result",
+    ],
+    "Advertising": [
+        "Summer Sale Campaign", "Brand Awareness Ad Set", "Retargeting Campaign",
+        "Social Media Promotion", "Holiday Special Offer",
+    ],
+    "Search": [
+        "Web Search Results", "Image Search Gallery", "News Article Digest",
+        "Product Comparison", "Local Business Listing",
+    ],
+}
+
+# Domain-specific entity type for ID prefixes
+_DOMAIN_ID_PREFIX: dict[str, str] = {
+    "Music": "TRK",
+    "Entertainment": "MOV",
+    "Food": "RST",
+    "Sports": "EVT",
+    "Travel": "BKG",
+    "Finance": "TXN",
+    "Education": "CRS",
+    "Location": "LOC",
+    "Commerce": "ORD",
+    "Business": "DOC",
+    "Cryptography": "KEY",
+    "Cybersecurity": "SEC",
+    "Database": "REC",
+    "Email": "MSG",
+    "Gaming": "GAM",
+    "Health_and_Fitness": "FIT",
+    "Advertising": "ADC",
+    "Search": "RES",
+    "Data": "DAT",
+    "Communication": "COM",
+}
+
 
 # ---------------------------------------------------------------------------
 # ValuePool
@@ -160,6 +273,34 @@ class ValuePool:
                     return pool[int(rng.integers(len(pool)))]
 
         return f"{value_type}_001"
+
+    def get_domain_name(
+        self, domain: str, rng: np.random.Generator, endpoint_name: str = ""
+    ) -> str:
+        """Return a domain-appropriate name (e.g., song title for Music)."""
+        names = _DOMAIN_NAMES.get(domain)
+        if names:
+            return names[int(rng.integers(len(names)))]
+        # For unmapped domains, generate a contextual name from the endpoint
+        if endpoint_name:
+            # Humanize the endpoint name for a more relevant result
+            parts = re.sub(r"[_\-/]", " ", endpoint_name).strip().split()
+            if len(parts) >= 2:
+                label = " ".join(w.capitalize() for w in parts[:3])
+                return f"{label} Result"
+        # Last resort: domain-based generic
+        if domain:
+            clean_domain = domain.replace("_", " ")
+            return f"{clean_domain} Service"
+        return self.get("product", rng)
+
+    def get_domain_id(
+        self, domain: str, entity_type: str, context: ConversationContext, rng: np.random.Generator
+    ) -> str:
+        """Return an ID with a domain-appropriate prefix."""
+        prefix = _DOMAIN_ID_PREFIX.get(domain, entity_type.upper()[:3])
+        new_id = f"{prefix}-{int(rng.integers(1000, 9999))}"
+        return new_id
 
     def get_id(
         self, entity_type: str, context: ConversationContext, rng: np.random.Generator
@@ -207,18 +348,20 @@ class SchemaBasedGenerator:
         arguments: dict[str, Any],
         context: ConversationContext,
         rng: np.random.Generator,
+        domain: str = "",
     ) -> dict[str, Any]:
         """Produce a mock response dict for *endpoint*."""
+        ep_name = endpoint.name
         if endpoint.response_schema and endpoint.response_schema.properties:
-            result = self._generate_from_schema(endpoint, arguments, context, rng)
+            result = self._generate_from_schema(endpoint, arguments, context, rng, domain)
         else:
             structure = self._infer_response_structure(endpoint)
             if structure == "list":
-                result = self._generate_list_response(endpoint, arguments, context, rng)
+                result = self._generate_list_response(endpoint, arguments, context, rng, domain, ep_name)
             elif structure == "status":
                 result = self._generate_status_response(endpoint, arguments, context, rng)
             else:
-                result = self._generate_object_response(endpoint, arguments, context, rng)
+                result = self._generate_object_response(endpoint, arguments, context, rng, domain, ep_name)
 
         # Grounding: propagate argument values into response
         for key, value in arguments.items():
@@ -237,13 +380,22 @@ class SchemaBasedGenerator:
         arguments: dict[str, Any],
         context: ConversationContext,
         rng: np.random.Generator,
+        domain: str = "",
     ) -> dict[str, Any]:
         schema = endpoint.response_schema
         if schema is None:
             return {}
         result: dict[str, Any] = {}
+        ep_name = endpoint.name
+        # Skip meta-schema fields that aren't actual response data
+        _SKIP_KEYS = {"type", "properties", "required", "items", "additionalProperties"}
         for key in schema.properties:
-            result[key] = self._generate_value_for_key(key, rng, context)
+            if key in _SKIP_KEYS:
+                continue
+            result[key] = self._generate_value_for_key(key, rng, context, domain, ep_name)
+        # If schema only had meta-fields, generate a sensible default response
+        if not result:
+            result = self._generate_object_response(endpoint, arguments, context, rng, domain, ep_name)
         return result
 
     # ------------------------------------------------------------------
@@ -251,16 +403,23 @@ class SchemaBasedGenerator:
     # ------------------------------------------------------------------
 
     def _generate_value_for_key(
-        self, key: str, rng: np.random.Generator, context: ConversationContext
+        self, key: str, rng: np.random.Generator, context: ConversationContext,
+        domain: str = "", ep_name: str = "",
     ) -> Any:
         k = key.lower()
         pool = self._pool
 
         if "id" in k:
+            if domain:
+                return pool.get_domain_id(domain, key, context, rng)
             return pool.get_id(key, context, rng)
+        if "title" in k or ("name" in k and domain):
+            return pool.get_domain_name(domain, rng, ep_name)
         if "city" in k and "name" in k:
             return pool.get("city", rng)
         if "name" in k:
+            if domain:
+                return pool.get_domain_name(domain, rng, ep_name)
             return pool.get("person_name", rng)
         if "email" in k:
             return pool.get("email", rng)
@@ -315,16 +474,28 @@ class SchemaBasedGenerator:
         arguments: dict[str, Any],
         context: ConversationContext,
         rng: np.random.Generator,
+        domain: str = "",
+        ep_name: str = "",
     ) -> dict[str, Any]:
         count = int(rng.integers(2, 6))
         items: list[dict[str, Any]] = []
         for _ in range(count):
+            item_name = self._pool.get_domain_name(domain, rng, ep_name)
             item: dict[str, Any] = {
-                "id": self._pool.get_id(f"{endpoint.name}_item", context, rng),
-                "name": self._pool.get("product", rng),
+                "id": self._pool.get_domain_id(domain, endpoint.name, context, rng) if domain
+                else self._pool.get_id(f"{endpoint.name}_item", context, rng),
+                "name": item_name,
                 "status": self._pool.get("status", rng),
             }
-            # Ensure unique IDs per item by clearing from context for next iteration
+            # Add domain-relevant extra fields
+            if domain in ("Finance", "Commerce"):
+                item["price"] = self._pool.get("price", rng)
+                item["currency"] = self._pool.get("currency", rng)
+            elif domain in ("Music", "Entertainment"):
+                item["rating"] = self._pool.get("rating", rng)
+            elif domain in ("Travel", "Location"):
+                item["city"] = self._pool.get("city", rng)
+            # Ensure unique IDs per item
             context.generated_ids.pop(f"{endpoint.name}_item", None)
             items.append(item)
         return {"results": items, "count": count}
@@ -335,14 +506,26 @@ class SchemaBasedGenerator:
         arguments: dict[str, Any],
         context: ConversationContext,
         rng: np.random.Generator,
+        domain: str = "",
+        ep_name: str = "",
     ) -> dict[str, Any]:
         entity = endpoint.name.lower().replace(" ", "_")
+        item_name = self._pool.get_domain_name(domain, rng, ep_name)
         result: dict[str, Any] = {
-            "id": self._pool.get_id(entity, context, rng),
-            "name": self._pool.get("product", rng),
+            "id": self._pool.get_domain_id(domain, entity, context, rng) if domain
+            else self._pool.get_id(entity, context, rng),
+            "name": item_name,
             "status": self._pool.get("status", rng),
             "created_at": self._pool.get("date", rng),
         }
+        # Add domain-specific fields
+        if domain in ("Finance", "Commerce"):
+            result["amount"] = self._pool.get("price", rng)
+            result["currency"] = self._pool.get("currency", rng)
+        elif domain == "Travel":
+            result["destination"] = self._pool.get("city", rng)
+        elif domain in ("Music", "Entertainment"):
+            result["rating"] = self._pool.get("rating", rng)
         return result
 
     def _generate_status_response(

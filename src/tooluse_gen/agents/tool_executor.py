@@ -98,8 +98,12 @@ class ToolExecutor:
         context: ConversationContext,
         rng: np.random.Generator,
     ) -> ToolCallResponse:
+        # Determine domain from the tool for domain-aware mock responses
+        tool = self._registry.get_endpoint_tool(request.endpoint_id)
+        domain = tool.domain if tool and tool.domain else ""
+
         data = self._generator.generate_response(
-            endpoint, request.arguments, context, rng
+            endpoint, request.arguments, context, rng, domain=domain
         )
 
         # Detect generated IDs in response data

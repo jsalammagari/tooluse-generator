@@ -28,20 +28,33 @@ tooluse --help
 ## Quick Start
 
 ```bash
-# 1. Build artifacts from ToolBench data
-tooluse build --input-dir data/toolenv/tools --output-dir output/build --force
+# 1. Build artifacts from ToolBench data (subset of 500 tools for speed)
+python -m tooluse_gen.cli.main build \
+    --input-dir data/toolenv/tools \
+    --output-dir output/build \
+    --force \
+    --max-tools 500 \
+    --no-semantic-edges
 
-# 2. Generate conversations (steering ON by default)
-tooluse generate --output output/conversations.jsonl --build-dir output/build \
+# 2. Generate conversations — Run B (steering ON, default)
+python -m tooluse_gen.cli.main generate \
+    --output output/run_b.jsonl \
+    --build-dir output/build \
     --count 100 --seed 42
 
-# 3. Generate without steering (Run A — for diversity experiment)
-tooluse generate --output output/no_steering.jsonl --build-dir output/build \
-    --count 100 --seed 42 --no-cross-conversation-steering
+# 3. Generate conversations — Run A (steering OFF, for diversity experiment)
+python -m tooluse_gen.cli.main generate \
+    --output output/run_a.jsonl \
+    --build-dir output/build \
+    --count 100 --seed 42 \
+    --no-cross-conversation-steering
 
-# 4. Evaluate generated conversations
-tooluse evaluate output/conversations.jsonl --format table
+# 4. Evaluate both runs
+python -m tooluse_gen.cli.main evaluate output/run_a.jsonl
+python -m tooluse_gen.cli.main evaluate output/run_b.jsonl
 ```
+
+> **Performance note:** With `--max-tools 500 --no-semantic-edges`, the build step completes in ~15 seconds and generation runs at ~50 conversations/second. Building with the full 10K+ ToolBench corpus and semantic edges requires ~2 hours for embedding computation on CPU.
 
 ## CLI Reference
 
@@ -54,7 +67,7 @@ tooluse evaluate output/conversations.jsonl --format table
 | `--config` / `-c` | `config/default.yaml` | Path to YAML configuration file |
 | `--config-from` | — | Load config from a previous output JSONL for reproducibility |
 
-### `tooluse build`
+### `build`
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -64,8 +77,10 @@ tooluse evaluate output/conversations.jsonl --format table
 | `--similarity-threshold` | `0.7` | Cosine threshold for semantic edges (0–1) |
 | `--force` / `-f` | off | Overwrite existing artifacts |
 | `--generate-pools` | off | Generate value pools for mock responses |
+| `--max-tools` | all | Limit tools loaded (stratified sample across domains) |
+| `--no-semantic-edges` | off | Skip embedding computation and semantic edges for faster builds |
 
-### `tooluse generate`
+### `generate`
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -81,7 +96,7 @@ tooluse evaluate output/conversations.jsonl --format table
 | `--quality-threshold` | `3.5` | Minimum average judge score to accept (0–5) |
 | `--no-cache` | off | Disable prompt caching |
 
-### `tooluse evaluate`
+### `evaluate`
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -98,8 +113,8 @@ All settings live in `config/default.yaml`. Override via `--config path/to/custo
 
 | Section | Field | Default | Description |
 |---------|-------|---------|-------------|
-| `models` | `assistant` | `"gpt-4o"` | LLM for the assistant agent |
-| `models` | `judge` | `"gpt-4o"` | LLM for quality scoring |
+| `models` | `assistant` | `"gpt-4o-mini"` | LLM for the assistant agent |
+| `models` | `judge` | `"gpt-4o-mini"` | LLM for quality scoring |
 | `models` | `user_simulator` | `"gpt-4o-mini"` | LLM for user message generation |
 | `models` | `mock_generator` | `"gpt-4o-mini"` | LLM for mock tool responses |
 | `models` | `embedding` | `"all-MiniLM-L6-v2"` | Sentence-transformer for semantic edges |
@@ -166,78 +181,48 @@ Each line in the output JSONL is a conversation record. See [DESIGN.md — Appen
 
 The spec requires running the pipeline twice with the same seed to compare diversity steering's effect on tool coverage and quality.
 
-### Using the experiment script
+### Running the experiment
 
 ```bash
-# Run with default settings (50 conversations per run, seed=42)
-python scripts/run_diversity_experiment.py
+# 1. Build once (shared by both runs)
+python -m tooluse_gen.cli.main build \
+    --input-dir data/toolenv/tools --output-dir output/build \
+    --force --max-tools 500 --no-semantic-edges
 
-# Run with specific categories and count
-python scripts/run_diversity_experiment.py \
-    --count 50 --seed 42 \
-    --categories Finance,Food,Weather,Travel,Sports \
-    --output-dir output/diversity_experiment
+# 2. Run A: steering disabled
+python -m tooluse_gen.cli.main generate \
+    --output output/run_a.jsonl --build-dir output/build \
+    --count 100 --seed 42 --no-cross-conversation-steering
 
-# View results
-cat output/diversity_experiment/diversity_results.json | python -m json.tool
+# 3. Run B: steering enabled (default)
+python -m tooluse_gen.cli.main generate \
+    --output output/run_b.jsonl --build-dir output/build \
+    --count 100 --seed 42
+
+# 4. Evaluate both
+python -m tooluse_gen.cli.main evaluate output/run_a.jsonl
+python -m tooluse_gen.cli.main evaluate output/run_b.jsonl
 ```
 
-### Using CLI commands directly
+### Results (100 conversations per run, seed=42, 500 tools, 49 domains)
 
-```bash
-# Build once (shared by both runs)
-tooluse build --input-dir data/toolenv/tools --output-dir output/build --force
+| Metric | Run A (no steering) | Run B (steering) | Delta |
+|--------|-------------------|-----------------|-------|
+| Conversations | 99 | 100 | +1 |
+| Pass rate | 100% | 100% | 0 |
+| Mean score | 4.25 | 4.25 | 0.00 |
+| Tool entropy | 7.31 | **7.42** | **+0.11** |
+| Unique tools | 182 | **194** | **+12** |
+| Unique tool combos | 94 | **100** | **+6** |
+| Unique domains | **42** | 38 | -4 |
 
-# Run A: steering disabled
-tooluse generate --output output/run_a.jsonl --build-dir output/build \
-    --count 50 --seed 42 --no-cross-conversation-steering
+**Key finding**: Steering improves tool diversity (higher entropy, more unique tools and combinations) with zero quality cost. See [DESIGN.md Section 9](DESIGN.md#9-diversity--quality-analysis) for full analysis.
 
-# Run B: steering enabled (default)
-tooluse generate --output output/run_b.jsonl --build-dir output/build \
-    --count 50 --seed 42
+### Reproducibility
 
-# Evaluate both
-tooluse evaluate output/run_a.jsonl --format json
-tooluse evaluate output/run_b.jsonl --format json
-```
-
-### Generating the comparison report
-
-```python
-from tooluse_gen.evaluation.diversity_report import (
-    load_and_compute, generate_comparison_report, format_markdown,
-)
-
-run_a = load_and_compute("output/run_a.jsonl", label="A", steering_enabled=False)
-run_b = load_and_compute("output/run_b.jsonl", label="B", steering_enabled=True)
-report = generate_comparison_report(run_a, run_b, seed=42)
-print(format_markdown(report))
-```
-
-### Expected output
-
-The script writes `diversity_results.json`:
-
-```json
-{
-  "experiment": {"seed": 42, "count": 50, "min_steps": 1, "max_steps": 3},
-  "run_a": {
-    "steering": false, "count": 50,
-    "tool_entropy": 4.27, "unique_tools": 31, "mean_score": 4.25
-  },
-  "run_b": {
-    "steering": true, "count": 50,
-    "tool_entropy": 4.34, "unique_tools": 32, "mean_score": 4.25
-  }
-}
-```
-
-### Seed and configuration requirements
-
-- **Same seed**: Both runs MUST use the same `--seed` value for a valid comparison
-- **Same data**: Both runs use the same build artifacts (build once, generate twice)
-- **Config**: `config/default.yaml` controls model selection, quality thresholds, and sampling
-- **Reproducibility**: Use `--config-from output/run_a.jsonl` to reproduce a previous run's exact configuration
+- **Same seed**: Both runs use `--seed 42` for valid comparison
+- **Same data**: Both runs use the same build artifacts
+- **Config replay**: Use `--config-from output/run_a.jsonl` to reproduce a previous run's exact configuration
 
 ## Running Tests
 
@@ -271,11 +256,11 @@ pytest --cov=tooluse_gen --cov-report=term-missing
 | Build fails: "No tools passed quality filter" | Check `--input-dir` points to valid ToolBench data. The default FAIR filter excludes poorly documented tools |
 | Generate fails: "Build directory does not exist" | Run `tooluse build` first to create artifacts in `--build-dir` |
 | Generate produces 0 conversations | Graph may be too sparse. Try `--min-steps 1 --max-steps 2` or lower `--similarity-threshold 0.1` during build |
-| `EmbeddingService` download fails | The `all-MiniLM-L6-v2` model downloads on first use (~90 MB). Ensure internet access, or set `--similarity-threshold 0` to skip semantic edges |
-| Evaluate reports all "invalid" | The structural validator checks for tool calls, role alternation, etc. Offline-generated conversations may not pass all checks — this is expected |
+| `EmbeddingService` download fails | Use `--no-semantic-edges` to skip embedding entirely, or ensure internet access for the ~90 MB model download |
+| Evaluate reports all "invalid" | Ensure the JSONL contains `tool_calls` in assistant messages. The structural validator checks role alternation and tool call presence |
 | `--config-from` fails | The JSONL must have a metadata header (first line with `__metadata__: true`). Files from `tooluse generate` include this automatically |
 | Tests show `SKIPPED` | E2E tests require `pytest --run-e2e`. Without this flag they are skipped by design |
-| Slow build with full ToolBench | Use `--categories` with the experiment script to work with a subset, or pass a filtered `--input-dir` |
+| Slow build with full ToolBench | Use `--max-tools 500 --no-semantic-edges` to build a fast subset (~15s). Full corpus with embeddings takes ~2 hours on CPU |
 
 ### Environment Requirements
 

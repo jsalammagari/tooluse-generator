@@ -14,6 +14,7 @@ agent on every turn.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import numpy as np
@@ -197,9 +198,17 @@ class AssistantAgent:
 
         # Offline mode — build arguments from grounding + placeholders.
         arguments: dict[str, Any] = {}
+        available = context.get_available_values()
+        has_prior_values = len(available) > 0
+
         if endpoint is not None:
             for param in endpoint.parameters:
-                if param.required or bool(rng.random() > 0.5):
+                # Always fill required params. For optional params:
+                # - If we have grounding values, fill more aggressively (80%)
+                #   to demonstrate coherent chaining
+                # - Otherwise, 50% chance
+                fill_prob = 0.8 if has_prior_values else 0.5
+                if param.required or bool(rng.random() < fill_prob):
                     arguments[param.name] = self._resolve_argument(param, context, rng)
         else:
             # Endpoint not in registry — fill expected_params with placeholders.
@@ -393,6 +402,11 @@ class AssistantAgent:
             f"{values_text}"
         )
 
+    @staticmethod
+    def _sanitize_function_name(name: str) -> str:
+        """Sanitize a name to match OpenAI's function name pattern: ^[a-zA-Z0-9_-]+$."""
+        return re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+
     def _build_tools_schema(self, chain: ToolChain) -> list[dict[str, Any]]:
         """Convert chain endpoints to OpenAI function-calling format."""
         schemas: list[dict[str, Any]] = []
@@ -407,7 +421,9 @@ class AssistantAgent:
                 continue
 
             properties: dict[str, Any] = {}
+            required_params: list[str] = []
             for param in ep.parameters:
+                safe_name = self._sanitize_function_name(param.name)
                 prop: dict[str, str] = {
                     "type": _ptype_to_json(
                         param.param_type
@@ -417,17 +433,20 @@ class AssistantAgent:
                 }
                 if param.description:
                     prop["description"] = param.description
-                properties[param.name] = prop
+                properties[safe_name] = prop
+                if param.name in ep.required_parameters:
+                    required_params.append(safe_name)
 
+            func_name = self._sanitize_function_name(ep.endpoint_id)
             schemas.append({
                 "type": "function",
                 "function": {
-                    "name": ep.endpoint_id,
+                    "name": func_name,
                     "description": ep.description or ep.name,
                     "parameters": {
                         "type": "object",
                         "properties": properties,
-                        "required": list(ep.required_parameters),
+                        "required": required_params,
                     },
                 },
             })
@@ -443,36 +462,100 @@ class AssistantAgent:
         context: ConversationContext,
         rng: np.random.Generator,
     ) -> Any:
-        """Resolve a single parameter value from grounding or placeholder."""
+        """Resolve a single parameter value from grounding or placeholder.
+
+        Priority: exact name match → semantic match (ID→ID, name→name) →
+        enum → default → type-based placeholder.
+        """
         available = context.get_available_values()
         pname: str = param.name
+        pname_lower: str = pname.lower()
         ptype: str = (
             param.param_type
             if isinstance(param.param_type, str)
             else str(param.param_type)
         )
 
-        # Exact match.
+        # 1. Exact name match.
         if pname in available:
             return available[pname]
 
-        # Substring match (skip step-prefixed keys).
+        # 2. Substring match on names (skip step-prefixed keys).
         for key, val in available.items():
             if "." in key:
                 continue
-            if pname in key or key in pname:
+            if pname_lower in key.lower() or key.lower() in pname_lower:
                 return val
 
-        # Enum.
+        # 3. Semantic type match — if param expects an ID, use any available ID.
+        #    This is the key grounding mechanism: step N's "hotel_id" gets
+        #    resolved to the "id" from step N-1's response.
+        if "id" in pname_lower:
+            for key, val in available.items():
+                if "." in key:
+                    continue
+                if "id" in key.lower() and isinstance(val, str):
+                    return val
+
+        if any(kw in pname_lower for kw in ("name", "title", "label")):
+            for key, val in available.items():
+                if "." in key:
+                    continue
+                if any(kw in key.lower() for kw in ("name", "title")) and isinstance(val, str):
+                    return val
+
+        if any(kw in pname_lower for kw in ("city", "location", "place", "destination", "address")):
+            for key, val in available.items():
+                if "." in key:
+                    continue
+                if any(kw in key.lower() for kw in ("city", "location", "destination")) and isinstance(val, str):
+                    return val
+
+        if any(kw in pname_lower for kw in ("date", "time", "start", "end", "check")):
+            for key, val in available.items():
+                if "." in key:
+                    continue
+                if any(kw in key.lower() for kw in ("date", "time", "created")) and isinstance(val, str):
+                    return val
+
+        if any(kw in pname_lower for kw in ("price", "cost", "amount", "budget")):
+            for key, val in available.items():
+                if "." in key:
+                    continue
+                if any(kw in key.lower() for kw in ("price", "cost", "amount")) and isinstance(val, (int, float)):
+                    return val
+
+        if any(kw in pname_lower for kw in ("status", "state")):
+            for key, val in available.items():
+                if "." in key:
+                    continue
+                if "status" in key.lower() and isinstance(val, str):
+                    return val
+
+        if any(kw in pname_lower for kw in ("email", "mail")):
+            for key, val in available.items():
+                if "." in key:
+                    continue
+                if "email" in key.lower() and isinstance(val, str):
+                    return val
+
+        if any(kw in pname_lower for kw in ("url", "link", "href")):
+            for key, val in available.items():
+                if "." in key:
+                    continue
+                if any(kw in key.lower() for kw in ("url", "link")) and isinstance(val, str):
+                    return val
+
+        # 4. Enum.
         if param.enum_values:
             idx = int(rng.integers(0, len(param.enum_values)))
             return param.enum_values[idx]
 
-        # Default.
+        # 5. Default.
         if param.default is not None:
             return param.default
 
-        # Type-based placeholder.
+        # 6. Type-based placeholder.
         return self._placeholder(ptype, pname, rng)
 
     @staticmethod
@@ -518,15 +601,46 @@ class AssistantAgent:
     # ------------------------------------------------------------------
 
     def _build_summary(self, context: ConversationContext) -> str:
-        """Build a short summary from tool outputs."""
+        """Build a natural summary from tool outputs."""
         if not context.tool_outputs:
-            return "No tool calls were made."
+            return "I wasn't able to find any results."
 
-        parts: list[str] = []
-        for resp in context.tool_outputs[-3:]:
-            for key, val in list(resp.data.items())[:3]:
-                parts.append(f"{key}={val}")
+        # Collect meaningful values from outputs
+        highlights: list[str] = []
+        for resp in context.tool_outputs:
+            data = resp.data
+            # Look for the most informative fields
+            name = data.get("name") or data.get("title")
+            status = data.get("status")
+            item_id = None
+            for k, v in data.items():
+                if "id" in k.lower() and isinstance(v, str):
+                    item_id = v
+                    break
 
-        n = len(context.tool_outputs)
-        details = ", ".join(parts[:6]) if parts else "completed successfully"
-        return f"Processed {n} tool call(s). Key details: {details}."
+            if name and status:
+                highlights.append(f"{name} (status: {status})")
+            elif name:
+                highlights.append(str(name))
+
+            # Check for list results
+            results = data.get("results")
+            if isinstance(results, list) and results:
+                count = data.get("count", len(results))
+                first_name = results[0].get("name", "item") if isinstance(results[0], dict) else "item"
+                highlights.append(f"found {count} results including {first_name}")
+
+            if item_id and not highlights:
+                highlights.append(f"reference ID: {item_id}")
+
+        if not highlights:
+            return "I've completed all the requested tasks successfully."
+
+        # Build natural summary
+        if len(highlights) == 1:
+            return f"Here's what I found: {highlights[0]}."
+        elif len(highlights) == 2:
+            return f"Here's what I found: {highlights[0]}, and {highlights[1]}."
+        else:
+            main = ", ".join(highlights[:2])
+            return f"Here's a summary: {main}, and {len(highlights) - 2} more result(s)."

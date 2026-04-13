@@ -382,8 +382,9 @@ class TestBuildToolsSchema:
     def test_required_params(self, registry, chain):
         agent = AssistantAgent(registry=registry)
         schema = agent._build_tools_schema(chain)
+        # Name is sanitized: "hotels/search" → "hotels_search"
         search = next(
-            s for s in schema if s["function"]["name"] == "hotels/search"
+            s for s in schema if "hotels" in s["function"]["name"] and "search" in s["function"]["name"]
         )
         assert search["function"]["parameters"]["required"] == ["city"]
 
@@ -391,7 +392,7 @@ class TestBuildToolsSchema:
         agent = AssistantAgent(registry=registry)
         schema = agent._build_tools_schema(chain)
         search = next(
-            s for s in schema if s["function"]["name"] == "hotels/search"
+            s for s in schema if "hotels" in s["function"]["name"] and "search" in s["function"]["name"]
         )
         props = search["function"]["parameters"]["properties"]
         assert "city" in props

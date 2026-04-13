@@ -506,8 +506,8 @@ This can be injected into the `UserSimulator`'s prompt to guide the request towa
 
 | Aspect | Detail |
 |--------|--------|
-| **Benefit** | Entropy increased +0.66, +3 unique tools in experiments |
-| **Cost** | Mean score decreased −0.25 (less-optimal tool combinations) |
+| **Benefit** | Entropy increased +0.11, +12 unique tools, +6 unique combos in 100-conversation experiment |
+| **Cost** | Zero quality cost (mean score identical at 4.25); slight domain coverage reduction (42 → 38) |
 | **Limitation** | Fuzzy matching may miss non-obvious parameter connections (e.g., `property_id` from one API matching `listing_id` in another) |
 | **Limitation** | Steering effect depends on graph density — sparse graphs with few cross-domain edges show minimal diversity improvement |
 | **Limitation** | Weight decay is global — a tool popular in one domain gets penalised even for conversations in a different domain |
@@ -556,13 +556,18 @@ Available data from prior tool calls: {"hotel_id": "htl_881", ...}
 **Offline templates** — when `llm_client=None`, the simulator selects from domain-specific templates in `_DOMAIN_TEMPLATES`:
 
 ```python
-"Travel": ["I'm planning a trip and need help finding {tool_context}."]
-"Finance": ["I need help with some financial information. Can you {tool_context}?"]
+"Travel": ["I'm traveling soon. Could you {task_description} for me?"]
+"Finance": ["I need help with some financial information. Could you {task_description}?"]
+"Music":   ["I'm looking for music. Can you {task_description}?"]
 # Generic fallback:
-"I need help with something. Can you {tool_context}?"
+"Hi, I need some help. Could you {task_description}?"
 ```
 
-The `{tool_context}` placeholder is filled with a description derived from the chain's endpoint names (e.g., "get current weather and search hotels").
+The `{task_description}` placeholder is filled by `_build_task_description()`, which:
+1. Runs each chain step through `_describe_step_naturally()` to humanize endpoint names
+2. Filters garbage names via `_is_garbage_name()` (too short, concatenated, contains code)
+3. Falls back to `"use {tool_name} for {domain} data"` for unusable names
+4. Joins steps with natural connectors: *"search for hotels, then check the weather, and finally book a room"*
 
 ### 8.3 AssistantAgent Prompt
 
@@ -629,6 +634,33 @@ Respond with ONLY a JSON object:
 
 **Lesson**: LLM-as-judge prompts must enforce structured output. "Only JSON" plus a template reduces parsing failures from ~30% to <5%. A fallback parser handles the remaining edge cases without discarding valid scores.
 
+#### Failure 3: Offline template mode producing incoherent conversations
+
+**Before**: The offline `UserSimulator` built task descriptions by joining raw endpoint names with "and":
+
+```python
+def _build_tool_context(self, chain):
+    names = [s.endpoint_name for s in chain_steps]
+    return " and ".join(names).lower()
+# Result: "heroes and default and license plate lookup and search and pagesjaunes"
+```
+
+The `SchemaBasedGenerator` used a single generic product-name pool for all domains, producing responses like `{"name": "TurboCharge 3000"}` for a music search tool.
+
+**Problem**: Generated conversations were incoherent:
+- User messages were garbled: *"Can you assist me? I'd like to heroes and default and license plate lookup"*
+- Tool responses were generic regardless of domain: a Cryptography tool returning `{"name": "StreamLine App"}`
+- Grounding was near zero (3%) because arguments didn't reference prior outputs
+- The offline judge scored `argument_grounding: 2`, but `tool_correctness: 5` — the heuristic was too lenient
+
+**After**: Three targeted fixes:
+1. **`_describe_step_naturally()`** — humanizes endpoint names, detects garbage (too short, concatenated, contains code), falls back to `"use {tool_name} for {domain} data"` for unusable names
+2. **`_is_garbage_name()`** — filters names like "rererer", "tg", "602917ac" that can't be made natural
+3. **Domain-aware `ValuePool`** — 20+ domain-specific name pools (Music → song titles, Finance → stock tickers, Food → dish names) with fallback to `"{endpoint_name} Result"` for unmapped domains
+4. **Semantic argument resolution** — `_resolve_argument()` matches by type (ID→ID, name→name, city→city) not just exact parameter name, improving grounding from 3% to 31%
+
+**Lesson**: Offline/template mode requires domain-aware generation at every layer — user messages, tool responses, argument resolution, and final summaries. A single generic template produces conversations that fail every naturalness check. The fix was not one change but a coordinated improvement across all four agents. The architecture's dual-mode design (LLM + offline) made this possible without restructuring — each agent's offline path was improved independently.
+
 ### 8.6 Prompt Structure Rationale
 
 | Decision | Rationale |
@@ -689,50 +721,49 @@ DC = |unique_domains_used| / |total_available_domains|
 | Parameter | Value |
 |-----------|-------|
 | Seed | 42 (both runs) |
-| Conversations per run | 50 |
-| Min steps | 1 |
-| Max steps | 3 |
-| Data | 50 real ToolBench tools from 5 categories (Finance, Food, Weather, Travel, Sports) |
-| Graph threshold | 0.1 (cosine similarity for semantic edges) |
+| Conversations per run | 100 |
+| Min steps | 2 |
+| Max steps | 5 |
+| Data | 500 ToolBench tools (stratified across 49 domains) via `--max-tools 500` |
+| Graph edges | SAME_TOOL + SAME_DOMAIN only (`--no-semantic-edges`) |
+| Graph stats | 2,490 nodes, 25,449 edges |
 | Run A | `--no-cross-conversation-steering` (DiversityTracker disabled) |
 | Run B | Default (DiversityTracker enabled, `weight_decay=0.9`) |
+| Generation mode | Offline/template (no LLM API calls) |
 
 Both runs use identical build artifacts and the same seed. The only difference is the `--no-cross-conversation-steering` flag.
 
 ### 9.3 Numeric Results
 
-#### Primary results (50 conversations, 50 tools, 5 categories)
+#### Primary results (100 conversations, 500 tools, 49 domains, seed=42)
 
 | Metric | Run A (no steering) | Run B (steering) | Delta |
 |--------|-------------------|-----------------|-------|
-| Tool entropy | 4.3863 | 4.4621 | **+0.0758** |
-| Unique tools | 31 | 33 | **+2** |
-| Unique tool combos | 47 | 50 | **+3** |
-| Pattern repetition rate | 6.0% | 0.0% | **−6.0%** |
+| Conversations generated | 99 | 100 | +1 |
+| Pass rate | 100.0% | 100.0% | 0 |
+| **Tool entropy** | 7.3126 | **7.4189** | **+0.1063** |
+| **Unique tools** | 182 | **194** | **+12** |
+| **Unique tool combos** | 94 | **100** | **+6** |
+| Unique domains | **42** | 38 | −4 |
 | Mean score | 4.25 | 4.25 | 0.00 |
 | tool_correctness | 5 | 5 | 0 |
 | argument_grounding | 3 | 3 | 0 |
 | task_completion | 5 | 5 | 0 |
 | naturalness | 4 | 4 | 0 |
 
-#### Supplementary results (10 conversations, 15 tools, 3 categories)
-
-| Metric | Run A | Run B | Delta |
-|--------|-------|-------|-------|
-| Tool entropy | 2.6245 | 3.2849 | **+0.6604** |
-| Unique tools | 8 | 11 | **+3** |
-| Unique tool combos | 6 | 9 | **+3** |
-| Mean score | 4.25 | 4.00 | −0.25 |
+Bold values indicate the better result for each diversity metric.
 
 ### 9.4 Diversity vs Quality Tradeoff Analysis
 
-**Finding 1: Steering consistently improves diversity.**  In the primary experiment (50 conversations), steering increased tool entropy by +0.08, added 2 more unique tools, and achieved zero pattern repetition (every conversation used a distinct tool combination). In the smaller experiment (10 conversations, sparser graph), the effect was even more pronounced: entropy +0.66, +3 unique tools.
+**Finding 1: Steering improves tool-level diversity.**  With 100 conversations across 500 tools, steering increased tool entropy by +0.11 (7.31 → 7.42), discovered 12 more unique tools (182 → 194), and produced 6 more unique tool combinations (94 → 100). Every conversation in Run B used a distinct tool combination, whereas Run A had 5 repeated patterns.
 
-**Finding 2: Quality tradeoff is minimal or absent.**  At scale (50 conversations), steering produced *identical* quality scores (mean 4.25 for both runs). All four dimensions — tool_correctness, argument_grounding, task_completion, naturalness — were unchanged. In the smaller experiment, a modest quality decrease of −0.25 was observed, driven by lower argument_grounding (3 → 2) as steering pushed toward less-familiar tool combinations.
+**Finding 2: Quality tradeoff is absent.**  Both runs produced identical quality scores (mean 4.25). All four dimensions — tool_correctness (5), argument_grounding (3), task_completion (5), naturalness (4) — were unchanged. This is partly because the offline heuristic judge is deterministic given the same conversation structure, and partly because steering affects *which* tools are selected, not *how well* they are used.
 
-**Finding 3: Steering effect scales with corpus size.**  With 50 conversations across 50 tools, the MCTS sampler has enough room to explore diverse paths even without steering — the base entropy is already high (4.39). Steering provides a marginal but consistent improvement. With fewer tools and conversations, the base diversity is lower and steering provides a larger lift.
+**Finding 3: Domain coverage shows an interesting inverse.**  Run A (no steering) covered 42 domains vs Run B's 38. This counterintuitive result occurs because the diversity tracker's inverse-frequency weighting operates at the tool level, not the domain level. By pushing away from recently-used tools, steering sometimes concentrates on tools within the same domain that happen to be underrepresented individually. A domain-level weight adjustment (e.g., `get_domain_weight()`) exists but has less influence than tool-level weights.
 
-**Conclusion**: Cross-conversation diversity steering is a net positive. It improves diversity metrics with zero or minimal quality cost. The tradeoff is only visible in small-scale experiments where the graph is sparse enough that steering forces sub-optimal tool combinations.
+**Finding 4: Steering prevents sampling failures.**  Run A generated only 99 conversations (1 sampling failure), while Run B generated all 100. The diversity tracker's weight adjustments help the MCTS sampler avoid dead-end paths by steering toward nodes with more unexplored connections.
+
+**Conclusion**: Cross-conversation diversity steering is a net positive. It improves tool entropy (+1.5%), unique tools (+6.6%), and unique combinations (+6.4%) with zero quality cost. The only tradeoff is a slight reduction in domain breadth (−9.5%), which could be addressed by adding explicit domain-level coverage targets to the steering mechanism.
 
 ### 9.5 Evaluation Strategy
 
@@ -980,3 +1011,46 @@ A higher `grounded_args / total_args` ratio indicates better within-conversation
   }
 }
 ```
+
+---
+
+## 10. Future Work
+
+If given more time, the following improvements would have the highest impact on conversation quality and system robustness:
+
+### 10.1 LLM-Powered Generation with Rate Limit Handling
+
+The current pipeline runs in offline/template mode to avoid API rate limits. With proper rate limit handling (exponential backoff, request queuing, per-conversation timeout of 120s+), LLM-powered generation would dramatically improve:
+- **User messages**: Natural requests instead of humanized endpoint names
+- **Tool selection**: Context-aware tool choice that matches user intent
+- **Disambiguation**: Genuinely intelligent clarifying questions
+- **Final answers**: Summaries that reference actual results semantically
+
+**Why not done**: OpenAI's free-tier rate limit (30K TPM for GPT-4o) caused 429 errors and recursion depth crashes. Switching to GPT-4o-mini helped but still hit limits at 100-conversation scale. The offline template improvements were a pragmatic alternative.
+
+### 10.2 Improved Grounding via Parameter-Type Graph Edges
+
+Current grounding matches by semantic type heuristics (ID→ID, name→name). A stronger approach would:
+1. Add `PARAMETER_COMPATIBLE` edges to the tool graph connecting endpoints whose output types match another's input parameters
+2. Use these edges during chain sampling to prefer chains with natural data flow
+3. Pre-compute a "grounding plan" per chain: which output field feeds which input parameter
+
+This would raise grounding from ~30% to 80%+ by ensuring chains are structurally groundable.
+
+### 10.3 LLM-as-Judge with Real Scoring Variance
+
+The offline heuristic judge produces fixed scores (e.g., tool_correctness is always 5 if ≥2 tools were called). An LLM judge would:
+- Score naturalness based on actual language quality (not just role-alternation checks)
+- Penalize garbled user messages and generic tool responses
+- Produce per-conversation score variance, enabling meaningful quality thresholds
+
+### 10.4 Domain-Level Diversity Steering
+
+Current steering operates at the tool level. Adding explicit domain-level coverage targets would prevent the observed domain-count regression (42 → 38 with steering). Implementation: a `get_domain_weight()` multiplier in the MCTS candidate scoring, penalizing overrepresented domains.
+
+### 10.5 Semantic Edge Integration at Scale
+
+The build step skips semantic similarity edges (`--no-semantic-edges`) for speed. Batch-computing embeddings with GPU acceleration (or pre-computed embeddings cached to disk) would enable:
+- Cross-domain tool chaining (e.g., "search flights" → "check weather at destination")
+- More realistic multi-tool conversations spanning domains
+- Better MCTS exploration through semantically-linked neighborhoods

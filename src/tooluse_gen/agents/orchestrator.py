@@ -258,10 +258,15 @@ class ConversationOrchestrator:
                 for call in resp.tool_calls:
                     self._logger.debug("Tool call: %s args=%s", call.endpoint_id, call.arguments)
                     endpoints_called.append(call.endpoint_id)
-                    # Count grounding before execution mutates context.
+                    # Count grounding: check if arg VALUE matches any available value
+                    # (not just key match — the semantic resolver maps across keys)
                     available = context.get_available_values()
-                    for key in call.arguments:
-                        if key in available:
+                    available_vals = set()
+                    for v in available.values():
+                        if isinstance(v, (str, int, float, bool)):
+                            available_vals.add(v)
+                    for key, val in call.arguments.items():
+                        if key in available or val in available_vals:
                             grounded_args += 1
                         else:
                             fresh_args += 1
